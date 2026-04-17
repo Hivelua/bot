@@ -28,7 +28,7 @@ client.on('messageCreate', async (message) => {
     if (command === 'promote') {
         const targetMention = args[0];
         if (!targetMention) {
-            return message.reply('Please mention a user to promote. Example: `.promote @user` or `.promote @user RoleName`');
+            return message.reply('Please mention a user to promote. Example: `.promote @user` or `.promote @user RoleName` or `.promote @user RoleName reason here`');
         }
 
         const userId = targetMention.replace(/[<@!>]/g, '');
@@ -47,8 +47,33 @@ client.on('messageCreate', async (message) => {
             return message.reply('I need **Manage Roles** permission to promote someone.');
         }
 
-        // Check if a specific role was mentioned
-        const roleName = args.slice(1).join(' ');
+        // Extract reason (everything after the role name)
+        let reason = 'No reason provided';
+        let roleName = args.slice(1).join(' ');
+        
+        // Check if there's a reason (looking for common patterns)
+        const reasonKeywords = ['reason', 'because', 'for:', '-reason', '--reason'];
+        let reasonIndex = -1;
+        
+        for (const keyword of reasonKeywords) {
+            const index = roleName.toLowerCase().indexOf(keyword);
+            if (index !== -1) {
+                reasonIndex = index;
+                break;
+            }
+        }
+        
+        if (reasonIndex !== -1) {
+            // Extract reason from the rest of the text
+            reason = roleName.substring(reasonIndex).replace(/reason|because|for:|-reason|--reason/gi, '').trim();
+            roleName = roleName.substring(0, reasonIndex).trim();
+        } else if (roleName.includes(' - ')) {
+            // Alternative format: "RoleName - reason here"
+            const parts = roleName.split(' - ');
+            roleName = parts[0];
+            reason = parts.slice(1).join(' - ');
+        }
+        
         let targetRole = null;
         let oldRole = null;
         let oldRoleName = 'None';
@@ -88,16 +113,16 @@ client.on('messageCreate', async (message) => {
             }
             
             try {
-                // Remove old role (if exists) and add new role
+                // Remove old role (if exists) and add new role with audit log reason
                 if (oldRole) {
-                    await targetMember.roles.remove(oldRole);
+                    await targetMember.roles.remove(oldRole, `Promoted by ${message.author.tag}: ${reason}`);
                 }
-                await targetMember.roles.add(targetRole);
+                await targetMember.roles.add(targetRole, `Promoted by ${message.author.tag}: ${reason}`);
                 
                 // Create embed
                 const embed = new EmbedBuilder()
                     .setTitle('LawsHub Promotion')
-                    .setDescription(`\`\`\`\n**Promoted ${targetMember.user.tag} to ${targetRole.name}**\n**Previous role:** ${oldRoleName}\n**Current role:** ${targetRole.name}\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.tag}\n\`\`\``)
+                    .setDescription(`\`\`\`\n**Promoted ${targetMember.user.tag} to ${targetRole.name}**\n**Previous role:** ${oldRoleName}\n**Current role:** ${targetRole.name}\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.tag}\n**Reason:** ${reason}\n\`\`\``)
                     .setColor(0x00FF00); // Green for promotion
                 
                 await message.reply({ embeds: [embed] });
@@ -151,14 +176,14 @@ client.on('messageCreate', async (message) => {
             }
 
             try {
-                await targetMember.roles.remove(highestUserRole);
-                await targetMember.roles.add(nextRole);
+                await targetMember.roles.remove(highestUserRole, `Promoted by ${message.author.tag}: ${reason}`);
+                await targetMember.roles.add(nextRole, `Promoted by ${message.author.tag}: ${reason}`);
                 
-                // Create embed
-                const embed = new EmbedBuilder()
-                    .setTitle('LawsHub Promotion')
-                    .setDescription(`\`\`\`\n**Promoted ${targetMember.user.tag} to ${nextRole.name}**\n**Previous role:** ${oldRoleName}\n**Current role:** ${nextRole.name}\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.tag}\n\`\`\``)
-                    .setColor(0x00FF00); // Green for promotion
+// Create embed
+const embed = new EmbedBuilder()
+    .setTitle('LawsHub Promotion')
+    .setDescription(`\`\`**Promoted ${targetMember.user.tag} to ${targetRole.name}**\`\`\n\n\`\`**Previous role:** ${oldRoleName}\`\`\n\n\`\`**Current role:** ${targetRole.name}\`\`\n\n\`\`**Time:** ${new Date().toLocaleString()}\`\`\n\n\`\`**Moderator:** ${message.author.tag}\`\`\n\n\`\`**Reason:** ${reason}\`\``)
+    .setColor(0x00FF00);
                 
                 await message.reply({ embeds: [embed] });
             } catch (error) {
@@ -172,7 +197,7 @@ client.on('messageCreate', async (message) => {
     if (command === 'demote') {
         const targetMention = args[0];
         if (!targetMention) {
-            return message.reply('Please mention a user to demote. Example: `.demote @user` or `.demote @user RoleName`');
+            return message.reply('Please mention a user to demote. Example: `.demote @user` or `.demote @user RoleName` or `.demote @user RoleName reason here`');
         }
 
         const userId = targetMention.replace(/[<@!>]/g, '');
@@ -191,8 +216,33 @@ client.on('messageCreate', async (message) => {
             return message.reply('I need **Manage Roles** permission to demote someone.');
         }
 
-        // Check if a specific role was mentioned
-        const roleName = args.slice(1).join(' ');
+        // Extract reason (everything after the role name)
+        let reason = 'No reason provided';
+        let roleName = args.slice(1).join(' ');
+        
+        // Check if there's a reason (looking for common patterns)
+        const reasonKeywords = ['reason', 'because', 'for:', '-reason', '--reason'];
+        let reasonIndex = -1;
+        
+        for (const keyword of reasonKeywords) {
+            const index = roleName.toLowerCase().indexOf(keyword);
+            if (index !== -1) {
+                reasonIndex = index;
+                break;
+            }
+        }
+        
+        if (reasonIndex !== -1) {
+            // Extract reason from the rest of the text
+            reason = roleName.substring(reasonIndex).replace(/reason|because|for:|-reason|--reason/gi, '').trim();
+            roleName = roleName.substring(0, reasonIndex).trim();
+        } else if (roleName.includes(' - ')) {
+            // Alternative format: "RoleName - reason here"
+            const parts = roleName.split(' - ');
+            roleName = parts[0];
+            reason = parts.slice(1).join(' - ');
+        }
+        
         let targetRole = null;
         let oldRole = null;
         let oldRoleName = 'None';
@@ -223,12 +273,12 @@ client.on('messageCreate', async (message) => {
             }
             
             try {
-                await targetMember.roles.remove(targetRole);
+                await targetMember.roles.remove(targetRole, `Demoted by ${message.author.tag}: ${reason}`);
                 
                 // Create embed
                 const embed = new EmbedBuilder()
                     .setTitle('LawsHub Demotion')
-                    .setDescription(`\`\`\`\n**Demoted ${targetMember.user.tag} from ${oldRoleName}**\n**Previous role:** ${oldRoleName}\n**Current role:** Removed\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.tag}\n\`\`\``)
+                    .setDescription(`\`\`\`\n**Demoted ${targetMember.user.tag} from ${oldRoleName}**\n**Previous role:** ${oldRoleName}\n**Current role:** Removed\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.tag}\n**Reason:** ${reason}\n\`\`\``)
                     .setColor(0xFF0000); // Red for demotion
                 
                 await message.reply({ embeds: [embed] });
@@ -276,14 +326,13 @@ client.on('messageCreate', async (message) => {
             }
 
             try {
-                await targetMember.roles.remove(lowestUserRole);
-                await targetMember.roles.add(nextRole);
+                await targetMember.roles.remove(lowestUserRole, `Demoted by ${message.author.tag}: ${reason}`);
+                await targetMember.roles.add(nextRole, `Demoted by ${message.author.tag}: ${reason}`);
                 
-                // Create embed
-                const embed = new EmbedBuilder()
-                    .setTitle('LawsHub Demotion')
-                    .setDescription(`\`\`\`\n**Demoted ${targetMember.user.tag} to ${nextRole.name}**\n**Previous role:** ${oldRoleName}\n**Current role:** ${nextRole.name}\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.tag}\n\`\`\``)
-                    .setColor(0xFF0000); // Red for demotion
+const embed = new EmbedBuilder()
+    .setTitle('LawsHub Demotion')
+    .setDescription(`\`\`**Demoted ${targetMember.user.tag} from ${oldRoleName}**\`\`\n\n\`\`**Previous role:** ${oldRoleName}\`\`\n\n\`\`**Current role:** Removed\`\`\n\n\`\`**Time:** ${new Date().toLocaleString()}\`\`\n\n\`\`**Moderator:** ${message.author.tag}\`\`\n\n\`\`**Reason:** ${reason}\`\``)
+    .setColor(0xFF0000);
                 
                 await message.reply({ embeds: [embed] });
             } catch (error) {
