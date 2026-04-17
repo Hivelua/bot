@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 const client = new Client({
     intents: [
@@ -28,7 +28,7 @@ client.on('messageCreate', async (message) => {
     if (command === 'promote') {
         const targetMention = args[0];
         if (!targetMention) {
-            return message.reply('Please mention a user to promote. Example: `.promote @user`');
+            return message.reply('Please mention a user to promote. Example: `.promote @user` or `.promote @user RoleName`');
         }
 
         const userId = targetMention.replace(/[<@!>]/g, '');
@@ -47,58 +47,124 @@ client.on('messageCreate', async (message) => {
             return message.reply('I need **Manage Roles** permission to promote someone.');
         }
 
-        // Get all roles the user has (excluding @everyone)
-        const userRoles = targetMember.roles.cache.filter(role => role.name !== '@everyone');
+        // Check if a specific role was mentioned
+        const roleName = args.slice(1).join(' ');
+        let targetRole = null;
+        let oldRole = null;
+        let oldRoleName = 'None';
         
-        if (userRoles.size === 0) {
-            return message.reply(`${targetMember.user.tag} has no roles to promote from.`);
-        }
-
-        // Find the highest role the user has
-        const highestUserRole = userRoles.sort((a, b) => b.position - a.position).first();
-        
-        // Find the next higher role in the server (above their current highest)
-        const allRoles = message.guild.roles.cache.filter(role => role.name !== '@everyone');
-        const sortedRoles = allRoles.sort((a, b) => b.position - a.position);
-        
-        let nextRole = null;
-        let foundCurrent = false;
-        
-        for (const role of sortedRoles.values()) {
-            if (foundCurrent) {
-                nextRole = role;
-                break;
-            }
-            if (role.id === highestUserRole.id) {
-                foundCurrent = true;
-            }
-        }
-        
-        if (!nextRole) {
-            return message.reply(`${targetMember.user.tag} already has the highest role in the server!`);
-        }
-        
-        // Check bot role hierarchy
-        const highestBotRole = botMember.roles.highest;
-        if (nextRole.position >= highestBotRole.position) {
-            return message.reply(`Cannot promote ${targetMember.user.tag} to ${nextRole.name} - that role is higher than or equal to my highest role.`);
-        }
-        
-        // Check if the moderator can manage the next role
-        const memberHighestRole = message.member.roles.highest;
-        if (nextRole.position >= memberHighestRole.position && message.member.id !== message.guild.ownerId) {
-            return message.reply(`Cannot promote ${targetMember.user.tag} to ${nextRole.name} - that role is higher than or equal to your highest role.`);
-        }
-
-        try {
-            // Remove the old role and add the new one
-            await targetMember.roles.remove(highestUserRole);
-            await targetMember.roles.add(nextRole);
+        if (roleName) {
+            // Try to find the role by name
+            targetRole = message.guild.roles.cache.find(role => 
+                role.name.toLowerCase() === roleName.toLowerCase()
+            );
             
-            await message.reply(`**${targetMember.user.tag} has been promoted** **to** ${nextRole.name}\n **Moderator:** ${message.author.tag}`);
-        } catch (error) {
-            console.error(error);
-            await message.reply('Failed to promote user.');
+            if (!targetRole) {
+                return message.reply(`Could not find a role named "${roleName}".`);
+            }
+            
+            // Check if user already has this role
+            if (targetMember.roles.cache.has(targetRole.id)) {
+                return message.reply(`${targetMember.user.tag} already has the ${targetRole.name} role.`);
+            }
+            
+            // Get the role we're replacing (highest current role)
+            const userRoles = targetMember.roles.cache.filter(role => role.name !== '@everyone');
+            if (userRoles.size > 0) {
+                oldRole = userRoles.sort((a, b) => b.position - a.position).first();
+                oldRoleName = oldRole.name;
+            }
+            
+            // Check bot role hierarchy
+            const highestBotRole = botMember.roles.highest;
+            if (targetRole.position >= highestBotRole.position) {
+                return message.reply(`Cannot promote ${targetMember.user.tag} to ${targetRole.name} - that role is higher than or equal to my highest role.`);
+            }
+            
+            // Check moderator hierarchy
+            const memberHighestRole = message.member.roles.highest;
+            if (targetRole.position >= memberHighestRole.position && message.member.id !== message.guild.ownerId) {
+                return message.reply(`Cannot promote ${targetMember.user.tag} to ${targetRole.name} - that role is higher than or equal to your highest role.`);
+            }
+            
+            try {
+                // Remove old role (if exists) and add new role
+                if (oldRole) {
+                    await targetMember.roles.remove(oldRole);
+                }
+                await targetMember.roles.add(targetRole);
+                
+                // Create embed
+                const embed = new EmbedBuilder()
+                    .setTitle('LawsHub Promotion')
+                    .setDescription(`\`\`\`\n**Promoted ${targetMember.user.tag} to ${targetRole.name}**\n**Previous role:** ${oldRoleName}\n**Current role:** ${targetRole.name}\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.tag}\n\`\`\``)
+                    .setColor(0x00FF00); // Green for promotion
+                
+                await message.reply({ embeds: [embed] });
+            } catch (error) {
+                console.error(error);
+                await message.reply('Failed to promote user.');
+            }
+        } else {
+            // No role specified - promote to next higher role
+            const userRoles = targetMember.roles.cache.filter(role => role.name !== '@everyone');
+            
+            if (userRoles.size === 0) {
+                return message.reply(`${targetMember.user.tag} has no roles to promote from. Use \`.promote @user RoleName\` to give them a specific role.`);
+            }
+
+            // Find the highest role the user has
+            const highestUserRole = userRoles.sort((a, b) => b.position - a.position).first();
+            oldRoleName = highestUserRole.name;
+            
+            // Find the next higher role in the server
+            const allRoles = message.guild.roles.cache.filter(role => role.name !== '@everyone');
+            const sortedRoles = allRoles.sort((a, b) => b.position - a.position);
+            
+            let nextRole = null;
+            let foundCurrent = false;
+            
+            for (const role of sortedRoles.values()) {
+                if (foundCurrent) {
+                    nextRole = role;
+                    break;
+                }
+                if (role.id === highestUserRole.id) {
+                    foundCurrent = true;
+                }
+            }
+            
+            if (!nextRole) {
+                return message.reply(`${targetMember.user.tag} already has the highest role in the server!`);
+            }
+            
+            // Check bot role hierarchy
+            const highestBotRole = botMember.roles.highest;
+            if (nextRole.position >= highestBotRole.position) {
+                return message.reply(`Cannot promote ${targetMember.user.tag} to ${nextRole.name} - that role is higher than or equal to my highest role.`);
+            }
+            
+            // Check moderator hierarchy
+            const memberHighestRole = message.member.roles.highest;
+            if (nextRole.position >= memberHighestRole.position && message.member.id !== message.guild.ownerId) {
+                return message.reply(`Cannot promote ${targetMember.user.tag} to ${nextRole.name} - that role is higher than or equal to your highest role.`);
+            }
+
+            try {
+                await targetMember.roles.remove(highestUserRole);
+                await targetMember.roles.add(nextRole);
+                
+                // Create embed
+                const embed = new EmbedBuilder()
+                    .setTitle('LawsHub Promotion')
+                    .setDescription(`\`\`\`\n**Promoted ${targetMember.user.tag} to ${nextRole.name}**\n**Previous role:** ${oldRoleName}\n**Current role:** ${nextRole.name}\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.tag}\n\`\`\``)
+                    .setColor(0x00FF00); // Green for promotion
+                
+                await message.reply({ embeds: [embed] });
+            } catch (error) {
+                console.error(error);
+                await message.reply('Failed to promote user.');
+            }
         }
     }
 
@@ -106,7 +172,7 @@ client.on('messageCreate', async (message) => {
     if (command === 'demote') {
         const targetMention = args[0];
         if (!targetMention) {
-            return message.reply('Please mention a user to demote. Example: `.demote @user`');
+            return message.reply('Please mention a user to demote. Example: `.demote @user` or `.demote @user RoleName`');
         }
 
         const userId = targetMention.replace(/[<@!>]/g, '');
@@ -125,53 +191,105 @@ client.on('messageCreate', async (message) => {
             return message.reply('I need **Manage Roles** permission to demote someone.');
         }
 
-        // Get all roles the user has (excluding @everyone)
-        const userRoles = targetMember.roles.cache.filter(role => role.name !== '@everyone');
+        // Check if a specific role was mentioned
+        const roleName = args.slice(1).join(' ');
+        let targetRole = null;
+        let oldRole = null;
+        let oldRoleName = 'None';
         
-        if (userRoles.size === 0) {
-            return message.reply(`${targetMember.user.tag} has no roles to demote from.`);
-        }
-
-        // Find the lowest role the user has (excluding @everyone)
-        const lowestUserRole = userRoles.sort((a, b) => a.position - b.position).first();
-        
-        // Find the next lower role in the server (below their current lowest)
-        const allRoles = message.guild.roles.cache.filter(role => role.name !== '@everyone');
-        const sortedRoles = allRoles.sort((a, b) => a.position - b.position);
-        
-        let nextRole = null;
-        let foundCurrent = false;
-        
-        for (const role of sortedRoles.values()) {
-            if (foundCurrent) {
-                nextRole = role;
-                break;
-            }
-            if (role.id === lowestUserRole.id) {
-                foundCurrent = true;
-            }
-        }
-        
-        if (!nextRole) {
-            return message.reply(`${targetMember.user.tag} already has the lowest role in the server.`);
-        }
-        
-        // Check bot role hierarchy
-        const highestBotRole = botMember.roles.highest;
-        if (nextRole.position >= highestBotRole.position && nextRole.position !== lowestUserRole.position) {
-            // This is a warning, but we can still try
-            console.log(`Next role ${nextRole.name} is high in hierarchy`);
-        }
-
-        try {
-            // Remove the old role and add the new one
-            await targetMember.roles.remove(lowestUserRole);
-            await targetMember.roles.add(nextRole);
+        if (roleName) {
+            // Try to find the role by name
+            targetRole = message.guild.roles.cache.find(role => 
+                role.name.toLowerCase() === roleName.toLowerCase()
+            );
             
-            await message.reply(`**${targetMember.user.tag} has been demoted** **to** ${nextRole.name}\n **Moderator:** ${message.author.tag}`);
-        } catch (error) {
-            console.error(error);
-            await message.reply('Failed to demote user.');
+            if (!targetRole) {
+                return message.reply(`Could not find a role named "${roleName}".`);
+            }
+            
+            // Check if user has this role
+            if (!targetMember.roles.cache.has(targetRole.id)) {
+                return message.reply(`${targetMember.user.tag} does not have the ${targetRole.name} role.`);
+            }
+            
+            // Get the role we're replacing (will be removed)
+            oldRole = targetRole;
+            oldRoleName = oldRole.name;
+            
+            // Check bot role hierarchy
+            const highestBotRole = botMember.roles.highest;
+            if (targetRole.position >= highestBotRole.position) {
+                return message.reply(`Cannot demote ${targetMember.user.tag} from ${targetRole.name} - that role is higher than or equal to my highest role.`);
+            }
+            
+            try {
+                await targetMember.roles.remove(targetRole);
+                
+                // Create embed
+                const embed = new EmbedBuilder()
+                    .setTitle('LawsHub Demotion')
+                    .setDescription(`\`\`\`\n**Demoted ${targetMember.user.tag} from ${oldRoleName}**\n**Previous role:** ${oldRoleName}\n**Current role:** Removed\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.tag}\n\`\`\``)
+                    .setColor(0xFF0000); // Red for demotion
+                
+                await message.reply({ embeds: [embed] });
+            } catch (error) {
+                console.error(error);
+                await message.reply('Failed to demote user.');
+            }
+        } else {
+            // No role specified - demote to next lower role
+            const userRoles = targetMember.roles.cache.filter(role => role.name !== '@everyone');
+            
+            if (userRoles.size === 0) {
+                return message.reply(`${targetMember.user.tag} has no roles to demote from.`);
+            }
+
+            // Find the lowest role the user has
+            const lowestUserRole = userRoles.sort((a, b) => a.position - b.position).first();
+            oldRoleName = lowestUserRole.name;
+            
+            // Find the next lower role in the server
+            const allRoles = message.guild.roles.cache.filter(role => role.name !== '@everyone');
+            const sortedRoles = allRoles.sort((a, b) => a.position - b.position);
+            
+            let nextRole = null;
+            let foundCurrent = false;
+            
+            for (const role of sortedRoles.values()) {
+                if (foundCurrent) {
+                    nextRole = role;
+                    break;
+                }
+                if (role.id === lowestUserRole.id) {
+                    foundCurrent = true;
+                }
+            }
+            
+            if (!nextRole) {
+                return message.reply(`${targetMember.user.tag} already has the lowest role in the server!`);
+            }
+            
+            // Check bot role hierarchy
+            const highestBotRole = botMember.roles.highest;
+            if (nextRole.position >= highestBotRole.position) {
+                console.log(`Warning: Next role ${nextRole.name} is high in hierarchy`);
+            }
+
+            try {
+                await targetMember.roles.remove(lowestUserRole);
+                await targetMember.roles.add(nextRole);
+                
+                // Create embed
+                const embed = new EmbedBuilder()
+                    .setTitle('LawsHub Demotion')
+                    .setDescription(`\`\`\`\n**Demoted ${targetMember.user.tag} to ${nextRole.name}**\n**Previous role:** ${oldRoleName}\n**Current role:** ${nextRole.name}\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.tag}\n\`\`\``)
+                    .setColor(0xFF0000); // Red for demotion
+                
+                await message.reply({ embeds: [embed] });
+            } catch (error) {
+                console.error(error);
+                await message.reply('Failed to demote user.');
+            }
         }
     }
 
