@@ -518,7 +518,6 @@ client.on('messageCreate', async (message) => {
             console.error(error);
             await message.reply('Failed to unjail user.');
         }
-    }
 
     // ========== SNIPE COMMAND ==========
     if (command === 'snipe') {
@@ -552,6 +551,7 @@ client.on('messageCreate', async (message) => {
             .setDescription(`Last ${snipeCount} deleted message${snipeCount !== 1 ? 's' : ''} :\n\`\`\`\n${description}\`\`\``);
         
         await message.reply({ embeds: [embed] });
+    }
     }
 });
 
