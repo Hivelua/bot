@@ -89,7 +89,7 @@ client.on('messageCreate', async (message) => {
 
         const backupRoleIds = roleBackups.get(targetMember.id);
         if (!backupRoleIds || backupRoleIds.length === 0) {
-            return message.reply(`No wiped roles found for ${targetMember.user.tag}. The bot may have restarted since the wipe.`);
+            return message.reply(`No wiped roles found for ${targetMember.user.tag}. Try wiping them first.`);
         }
 
         try {
@@ -102,7 +102,7 @@ client.on('messageCreate', async (message) => {
             }
 
             if (rolesToRestore.length === 0) {
-                return message.reply('Cannot restore.');
+                return message.reply('Cannot restore - the original roles no longer exist.');
             }
 
             await targetMember.roles.add(rolesToRestore, `Restored by ${message.author.tag} (${message.author.id})`);
@@ -115,7 +115,6 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // ========== JAIL COMMAND ==========
     // ========== JAIL COMMAND ==========
     if (command === 'jail') {
         const targetMention = args[0];
@@ -233,5 +232,6 @@ client.on('messageCreate', async (message) => {
             await message.reply('Failed to unjail user.');
         }
     }
-    
+});
+
 client.login(process.env.DISCORD_TOKEN);
