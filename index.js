@@ -12,6 +12,7 @@ const client = new Client({
 const PREFIX = '.';
 const roleBackups = new Map(); // For wipe/unwipe
 const jailBackups = new Map(); // For jail/unjail
+const snipeData = new Map(); // Stores deleted messages per channel
 
 client.once('ready', () => {
     console.log(`${client.user.tag} is online!`);
@@ -519,5 +520,39 @@ client.on('messageCreate', async (message) => {
         }
     }
 });
+
+    // ========== SNIPE COMMAND ==========
+    if (command === 'snipe') {
+        // Check if sniped messages exist for this channel
+        if (!snipeData.has(message.channel.id)) {
+            return message.reply('No deleted messages found in this channel.');
+        }
+        
+        const channelSnipes = snipeData.get(message.channel.id);
+        const snipeCount = Math.min(channelSnipes.length, 5);
+        
+        if (snipeCount === 0) {
+            return message.reply('No deleted messages found in this channel.');
+        }
+        
+        // Build the description with deleted messages
+        let description = '';
+        for (let i = 0; i < snipeCount; i++) {
+            const snipe = channelSnipes[i];
+            const timeAgo = Math.floor((Date.now() - snipe.timestamp) / 1000);
+            const timeText = timeAgo < 60 ? `${timeAgo} seconds ago` : 
+                           timeAgo < 3600 ? `${Math.floor(timeAgo / 60)} minutes ago` :
+                           `${Math.floor(timeAgo / 3600)} hours ago`;
+            
+            description += `${snipe.author} : "${snipe.content}"\n-# ${timeText}\n\n`;
+        }
+        
+        const embed = new EmbedBuilder()
+            .setTitle('LawsHub Snipe')
+            .setColor(0x14004B)
+            .setDescription(`Last ${snipeCount} deleted message${snipeCount !== 1 ? 's' : ''} :\n\`\`\`\n${description}\`\`\``);
+        
+        await message.reply({ embeds: [embed] });
+    }
 
 client.login(process.env.DISCORD_TOKEN);
