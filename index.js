@@ -121,4 +121,100 @@ client.on('messageCreate', async (message) => {
     }
 });
 
+    // ========== JAIL COMMAND ==========
+    if (command === 'jail') {
+        const targetMention = args[0];
+        if (!targetMention) {
+            return message.reply('Please mention a user to jail. Example: `.jail @user`');
+        }
+
+        const userId = targetMention.replace(/[<@!>]/g, '');
+        const targetMember = await message.guild.members.fetch(userId).catch(() => null);
+
+        if (!targetMember) {
+            return message.reply('Could not find user.');
+        }
+
+        // Check permissions
+        if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+            return message.reply('You need **Moderate Members** permission to jail someone.');
+        }
+
+        const botMember = await message.guild.members.fetch(client.user.id);
+        if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+            return message.reply('I need **Manage Roles** permission to assign the jail role.');
+        }
+        
+        const jailRoleName = 'Jailed'; // Change this to your role name
+        const jailRole = message.guild.roles.cache.find(role => role.name === jailRoleName);
+
+        if (!jailRole) {
+            return message.reply(`Could not find a role named "${jailRoleName}".`);
+        }
+
+        const highestBotRole = botMember.roles.highest;
+        if (jailRole.position >= highestBotRole.position) {
+            return message.reply(`The ${jailRoleName} role is higher than or equal to my highest role.`);
+        }
+
+        // Check if user already has the role
+        if (targetMember.roles.cache.has(jailRole.id)) {
+            return message.reply(`${targetMember.user.tag} is already jailed!`);
+        }
+
+        try {
+            await targetMember.roles.add(jailRole);
+            await message.reply(`**${targetMember.user.tag} has been jailed!**\n **Moderator:** ${message.author.tag}`);
+        } catch (error) {
+            console.error(error);
+            await message.reply('Failed to jail user.');
+        }
+    }
+
+    // ========== UNJAIL COMMAND ==========
+    if (command === 'unjail') {
+        const targetMention = args[0];
+        if (!targetMention) {
+            return message.reply('Please mention a user to unjail. Example: `.unjail @user`');
+        }
+
+        const userId = targetMention.replace(/[<@!>]/g, '');
+        const targetMember = await message.guild.members.fetch(userId).catch(() => null);
+
+        if (!targetMember) {
+            return message.reply('Could not find user.');
+        }
+
+        // Check permissions
+        if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+            return message.reply('You need **Moderate Members** permission to unjail someone.');
+        }
+
+        const botMember = await message.guild.members.fetch(client.user.id);
+        if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+            return message.reply('I need **Manage Roles** permission to remove the jail role.');
+        }
+        
+        const jailRoleName = 'Jailed'; // Must match the role name from jail command
+        const jailRole = message.guild.roles.cache.find(role => role.name === jailRoleName);
+
+        if (!jailRole) {
+            return message.reply(`Could not find a role named "${jailRoleName}".`);
+        }
+
+        // Check if user has the role
+        if (!targetMember.roles.cache.has(jailRole.id)) {
+            return message.reply(`${targetMember.user.tag} is not jailed.`);
+        }
+
+        try {
+            await targetMember.roles.remove(jailRole);
+            await message.reply(`**${targetMember.user.tag} has been unjailed!**\n **Moderator:** ${message.author.tag}`);
+        } catch (error) {
+            console.error(error);
+            await message.reply('Failed to unjail user.');
+        }
+    }
+
+
 client.login(process.env.DISCORD_TOKEN);
