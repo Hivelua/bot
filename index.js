@@ -519,7 +519,6 @@ client.on('messageCreate', async (message) => {
             await message.reply('Failed to unjail user.');
         }
     }
-});
 
     // ========== SNIPE COMMAND ==========
     if (command === 'snipe') {
@@ -554,5 +553,6 @@ client.on('messageCreate', async (message) => {
         
         await message.reply({ embeds: [embed] });
     }
+});
 
 client.login(process.env.DISCORD_TOKEN);
