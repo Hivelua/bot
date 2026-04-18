@@ -20,7 +20,7 @@ client.once('ready', () => {
 });
 
 // Helper function to create success embed
-function createSuccessEmbed(title, description, actionType) {
+function createSuccessEmbed(title, description) {
     const embed = new EmbedBuilder()
         .setTitle(title)
         .setDescription(`${description}\n\n<:success:1495086393196675083> Action Successful`)
@@ -53,6 +53,35 @@ client.on('messageCreate', async (message) => {
         return reason;
     }
 
+    // ========== PING COMMAND ==========
+    if (command === 'ping') {
+        const sent = await message.reply({ embeds: [createErrorEmbed('Pinging...', 'Calculating bot latency...')] });
+        
+        const wsLatency = client.ws.ping;
+        const roundtripLatency = sent.createdTimestamp - message.createdTimestamp;
+        
+        let pingColor = 0x00FF00;
+        let pingStatus = 'Excellent';
+        
+        if (wsLatency > 200) {
+            pingColor = 0xFFA500;
+            pingStatus = 'Mediocre';
+        }
+        if (wsLatency > 400) {
+            pingColor = 0xFF0000;
+            pingStatus = 'Bad';
+        }
+        
+        const embed = new EmbedBuilder()
+            .setTitle('🏓 Pong!')
+            .setDescription(`\`\`\`\n📡 WebSocket Latency: ${wsLatency}ms\n🔄 Round-trip Latency: ${roundtripLatency}ms\n📊 Status: ${pingStatus}\n⏰ Time: ${new Date().toLocaleString()}\n\`\`\``)
+            .setColor(pingColor)
+            .setFooter({ text: `Requested by ${message.author.tag}`, iconURL: message.author.displayAvatarURL() })
+            .setTimestamp();
+        
+        await sent.edit({ embeds: [embed] });
+    }
+
     // ========== BAN COMMAND ==========
     if (command === 'ban') {
         const targetMention = args[0];
@@ -62,7 +91,6 @@ client.on('messageCreate', async (message) => {
 
         const userId = targetMention.replace(/[<@!>]/g, '');
         
-        // Prevent self-ban
         if (userId === message.author.id) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'You cannot ban yourself.')] });
         }
@@ -81,7 +109,6 @@ client.on('messageCreate', async (message) => {
             return message.reply({ embeds: [createErrorEmbed('Error', 'I need **Ban Members** permission to ban someone.')] });
         }
 
-        // Check role hierarchy
         const memberHighestRole = message.member.roles.highest;
         const targetHighestRole = targetMember.roles.highest;
         
@@ -98,7 +125,7 @@ client.on('messageCreate', async (message) => {
 
         try {
             await targetMember.ban({ reason: `Banned by ${message.author.tag}: ${reason}` });
-            const embed = createSuccessEmbed('User Banned', `**User:** ${targetMember.user.toString()}\n\n**Moderator:** ${message.author.toString()}\n\n**Reason:** ${reason}`, 'ban');
+            const embed = createSuccessEmbed('User Banned', `**User:** ${targetMember.user.toString()}\n\n**Moderator:** ${message.author.toString()}\n\n**Reason:** ${reason}`);
             await message.reply({ embeds: [embed] });
         } catch (error) {
             console.error(error);
@@ -130,34 +157,8 @@ client.on('messageCreate', async (message) => {
                 return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user in the ban list.')] });
             }
 
-            // Check ban hierarchy (who banned them)
-            const banEntry = await message.guild.bans.fetch(bannedUser.user.id);
-            const banReason = banEntry.reason || 'No reason';
-            
-            // Extract who banned from reason (if possible)
-            let bannerId = null;
-            const bannerMatch = banReason.match(/Banned by (.+?):/);
-            if (bannerMatch) {
-                const bannerTag = bannerMatch[1];
-                const bannerUser = await client.users.fetch({ query: bannerTag }).catch(() => null);
-                if (bannerUser && bannerUser.first()) {
-                    bannerId = bannerUser.first().id;
-                }
-            }
-            
-            if (bannerId && bannerId !== message.author.id) {
-                const bannerMember = await message.guild.members.fetch(bannerId).catch(() => null);
-                if (bannerMember && message.member.id !== message.guild.ownerId) {
-                    const memberHighestRole = message.member.roles.highest;
-                    const bannerHighestRole = bannerMember.roles.highest;
-                    if (bannerHighestRole.position > memberHighestRole.position) {
-                        return message.reply({ embeds: [createErrorEmbed('Error', `Cannot unban ${bannedUser.user.tag} - they were banned by someone with a higher role than you.`)] });
-                    }
-                }
-            }
-
             await message.guild.members.unban(bannedUser.user.id, `Unbanned by ${message.author.tag}`);
-            const embed = createSuccessEmbed('User Unbanned', `**User:** ${bannedUser.user.toString()}\n\n**Moderator:** ${message.author.toString()}`, 'unban');
+            const embed = createSuccessEmbed('User Unbanned', `**User:** ${bannedUser.user.toString()}\n\n**Moderator:** ${message.author.toString()}`);
             await message.reply({ embeds: [embed] });
         } catch (error) {
             console.error(error);
@@ -174,7 +175,6 @@ client.on('messageCreate', async (message) => {
 
         const userId = targetMention.replace(/[<@!>]/g, '');
         
-        // Prevent self-kick
         if (userId === message.author.id) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'You cannot kick yourself.')] });
         }
@@ -193,7 +193,6 @@ client.on('messageCreate', async (message) => {
             return message.reply({ embeds: [createErrorEmbed('Error', 'I need **Kick Members** permission to kick someone.')] });
         }
 
-        // Check role hierarchy
         const memberHighestRole = message.member.roles.highest;
         const targetHighestRole = targetMember.roles.highest;
         
@@ -210,7 +209,7 @@ client.on('messageCreate', async (message) => {
 
         try {
             await targetMember.kick(`Kicked by ${message.author.tag}: ${reason}`);
-            const embed = createSuccessEmbed('User Kicked', `**User:** ${targetMember.user.toString()}\n\n**Moderator:** ${message.author.toString()}\n\n**Reason:** ${reason}`, 'kick');
+            const embed = createSuccessEmbed('User Kicked', `**User:** ${targetMember.user.toString()}\n\n**Moderator:** ${message.author.toString()}\n\n**Reason:** ${reason}`);
             await message.reply({ embeds: [embed] });
         } catch (error) {
             console.error(error);
@@ -227,7 +226,6 @@ client.on('messageCreate', async (message) => {
 
         const userId = targetMention.replace(/[<@!>]/g, '');
         
-        // Prevent self-mute
         if (userId === message.author.id) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'You cannot mute yourself.')] });
         }
@@ -246,7 +244,6 @@ client.on('messageCreate', async (message) => {
             return message.reply({ embeds: [createErrorEmbed('Error', 'I need **Moderate Members** permission to mute someone.')] });
         }
 
-        // Check role hierarchy
         const memberHighestRole = message.member.roles.highest;
         const targetHighestRole = targetMember.roles.highest;
         
@@ -254,7 +251,6 @@ client.on('messageCreate', async (message) => {
             return message.reply({ embeds: [createErrorEmbed('Error', `Cannot mute ${targetMember.user.tag} - they have a role higher than or equal to your highest role.`)] });
         }
 
-        // Parse duration
         let duration = args[1];
         let reasonStart = 2;
         let milliseconds = 0;
@@ -279,7 +275,7 @@ client.on('messageCreate', async (message) => {
         try {
             await targetMember.timeout(milliseconds, `Muted by ${message.author.tag}: ${reason}`);
             const durationText = `${durationValue}${durationUnit === 'm' ? ' minute(s)' : durationUnit === 'h' ? ' hour(s)' : ' day(s)'}`;
-            const embed = createSuccessEmbed('User Muted', `**User:** ${targetMember.user.toString()}\n\n**Moderator:** ${message.author.toString()}\n\n**Duration:** ${durationText}\n\n**Reason:** ${reason}`, 'mute');
+            const embed = createSuccessEmbed('User Muted', `**User:** ${targetMember.user.toString()}\n\n**Moderator:** ${message.author.toString()}\n\n**Duration:** ${durationText}\n\n**Reason:** ${reason}`);
             await message.reply({ embeds: [embed] });
         } catch (error) {
             console.error(error);
@@ -316,7 +312,7 @@ client.on('messageCreate', async (message) => {
 
         try {
             await targetMember.timeout(null, `Unmuted by ${message.author.tag}`);
-            const embed = createSuccessEmbed('User Unmuted', `**User:** ${targetMember.user.toString()}\n\n**Moderator:** ${message.author.toString()}`, 'unmute');
+            const embed = createSuccessEmbed('User Unmuted', `**User:** ${targetMember.user.toString()}\n\n**Moderator:** ${message.author.toString()}`);
             await message.reply({ embeds: [embed] });
         } catch (error) {
             console.error(error);
@@ -333,7 +329,6 @@ client.on('messageCreate', async (message) => {
 
         const userId = targetMention.replace(/[<@!>]/g, '');
         
-        // Prevent self-warn
         if (userId === message.author.id) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'You cannot warn yourself.')] });
         }
@@ -345,6 +340,13 @@ client.on('messageCreate', async (message) => {
 
         if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'You need **Moderate Members** permission to warn someone.')] });
+        }
+
+        const memberHighestRole = message.member.roles.highest;
+        const targetHighestRole = targetMember.roles.highest;
+        
+        if (targetHighestRole.position >= memberHighestRole.position && message.member.id !== message.guild.ownerId) {
+            return message.reply({ embeds: [createErrorEmbed('Error', `Cannot warn ${targetMember.user.tag} - they have a role higher than or equal to your highest role.`)] });
         }
 
         const reason = getReason(args.slice(1));
@@ -364,7 +366,7 @@ client.on('messageCreate', async (message) => {
 
         const warnCount = warns.get(userId).length;
         
-        const embed = createSuccessEmbed('User Warned', `**User:** ${targetMember.user.toString()}\n\n**Moderator:** ${message.author.toString()}\n\n**Reason:** ${reason}\n\n**Warning ID:** ${warnId}\n\n**Total Warnings:** ${warnCount}`, 'warn');
+        const embed = createSuccessEmbed('User Warned', `**User:** ${targetMember.user.toString()}\n\n**Moderator:** ${message.author.toString()}\n\n**Reason:** ${reason}\n\n**Warning ID:** ${warnId}\n\n**Total Warnings:** ${warnCount}`);
         await message.reply({ embeds: [embed] });
     }
 
@@ -379,7 +381,6 @@ client.on('messageCreate', async (message) => {
 
         const userId = targetMention.replace(/[<@!>]/g, '');
         
-        // Prevent self-unwarn
         if (userId === message.author.id) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'You cannot remove your own warnings.')] });
         }
@@ -394,4 +395,83 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!warns.has(userId)) {
-            return message.reply({ embeds: [createErrorEmbed('Error', `${targetMember.user.tag} has no warnings.`)
+            return message.reply({ embeds: [createErrorEmbed('Error', `${targetMember.user.tag} has no warnings.`)] });
+        }
+
+        const userWarns = warns.get(userId);
+        const warnIndex = userWarns.findIndex(w => w.id === warnId);
+        
+        if (warnIndex === -1) {
+            return message.reply({ embeds: [createErrorEmbed('Error', `Could not find a warning with ID ${warnId}. Use \`.warnings @user\` to see all warning IDs.`)] });
+        }
+
+        const removedWarn = userWarns[warnIndex];
+        
+        if (removedWarn.moderatorId !== message.author.id) {
+            const originalWarner = await message.guild.members.fetch(removedWarn.moderatorId).catch(() => null);
+            if (originalWarner && message.member.id !== message.guild.ownerId) {
+                const memberHighestRole = message.member.roles.highest;
+                const warnerHighestRole = originalWarner.roles.highest;
+                if (warnerHighestRole.position > memberHighestRole.position) {
+                    return message.reply({ embeds: [createErrorEmbed('Error', `Cannot remove this warning - it was issued by someone with a higher role than you (${removedWarn.moderator}).`)] });
+                }
+            }
+        }
+
+        userWarns.splice(warnIndex, 1);
+        if (userWarns.length === 0) {
+            warns.delete(userId);
+        }
+
+        const embed = createSuccessEmbed('Warning Removed', `**User:** ${targetMember.user.toString()}\n\n**Removed Warning ID:** ${warnId}\n\n**Original Reason:** ${removedWarn.reason}\n\n**Original Moderator:** ${removedWarn.moderator}\n\n**Removed by:** ${message.author.toString()}\n\n**Remaining Warnings:** ${userWarns.length}`);
+        await message.reply({ embeds: [embed] });
+    }
+
+    // ========== WARNINGS COMMAND ==========
+    if (command === 'warnings') {
+        const targetMention = args[0];
+        if (!targetMention) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Please mention a user to view warnings. Example: `.warnings @user`')] });
+        }
+
+        const userId = targetMention.replace(/[<@!>]/g, '');
+        const targetMember = await message.guild.members.fetch(userId).catch(() => null);
+
+        if (!targetMember) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user.')] });
+        }
+
+        if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'You need **Moderate Members** permission to view warnings.')] });
+        }
+
+        const userWarns = warns.get(userId) || [];
+        
+        if (userWarns.length === 0) {
+            const embed = new EmbedBuilder()
+                .setTitle(`Warnings for ${targetMember.user.tag}`)
+                .setDescription('This user has no warnings.')
+                .setColor(0x00FF00)
+                .setTimestamp();
+            return message.reply({ embeds: [embed] });
+        }
+
+        let description = `**Total Warnings:** ${userWarns.length}\n\n`;
+        userWarns.forEach((warn, index) => {
+            description += `**Warning #${index + 1} (ID: ${warn.id})**\n`;
+            description += `📝 Reason: ${warn.reason}\n`;
+            description += `👤 Moderator: ${warn.moderator}\n`;
+            description += `⏰ Time: ${warn.timestamp}\n\n`;
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle(`Warnings for ${targetMember.user.tag}`)
+            .setDescription(description)
+            .setColor(0xFFA500)
+            .setTimestamp();
+        
+        await message.reply({ embeds: [embed] });
+    }
+});
+
+client.login(process.env.DISCORD_TOKEN);
