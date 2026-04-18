@@ -23,7 +23,7 @@ client.once('ready', () => {
 function createSuccessEmbed(title, description) {
     const embed = new EmbedBuilder()
         .setTitle(title)
-        .setDescription(`${description}\n\n<:success:1495086393196675083> Action Successful`)
+        .setDescription(`${description}\n\n<:emoji:1495090115607924838> Action Successful`)
         .setColor(0x00FF00)
         .setTimestamp();
     return embed;
