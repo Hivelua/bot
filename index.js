@@ -109,10 +109,12 @@ client.on('messageCreate', async (message) => {
         return reason;
     }
 
-    // ========== SAY COMMAND ==========
+    // ========== SAY COMMAND (Owner Only) ==========
     if (command === 'say') {
-        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return message.reply(`<:unknown:1495103708957118684> You need **Administrator** permission to use this command.`);
+        const OWNER_ID = '1413103929931337751';
+        
+        if (message.author.id !== OWNER_ID) {
+            return message.reply(`<:unknown:1495103708957118684> Only the bot owner can use this command.`);
         }
         
         const sayMessage = args.join(' ');
