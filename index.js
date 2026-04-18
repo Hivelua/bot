@@ -20,7 +20,6 @@ client.once('ready', () => {
     console.log(`${client.user.tag} is online!`);
 });
 
-// Helper function to create success embed
 function createSuccessEmbed(title, description) {
     const embed = new EmbedBuilder()
         .setTitle(title)
@@ -30,7 +29,6 @@ function createSuccessEmbed(title, description) {
     return embed;
 }
 
-// Helper function to create error embed
 function createErrorEmbed(title, description) {
     const embed = new EmbedBuilder()
         .setTitle(title)
@@ -38,6 +36,18 @@ function createErrorEmbed(title, description) {
         .setColor(0xFF0000)
         .setTimestamp();
     return embed;
+}
+
+// Helper function to get user ID from mention or raw ID
+function getUserIdFromInput(input) {
+    if (!input) return null;
+    // Remove mention formatting <@!123> or <@123>
+    let id = input.replace(/[<@!>]/g, '');
+    // Check if it's a valid Discord ID (17-20 digits)
+    if (/^\d{17,20}$/.test(id)) {
+        return id;
+    }
+    return null;
 }
 
 client.on('messageCreate', async (message) => {
@@ -89,9 +99,8 @@ client.on('messageCreate', async (message) => {
             return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a user ID or mention a user to ban. Example: `.ban 123456789012345678 reason here` or `.ban @user reason here`')] });
         }
 
-        let userId = userInput.replace(/[<@!>]/g, '');
-        
-        if (!/^\d{17,20}$/.test(userId)) {
+        const userId = getUserIdFromInput(userInput);
+        if (!userId) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'Invalid user ID. Please provide a valid user ID or mention a user.')] });
         }
         
@@ -138,40 +147,26 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // ========== UNBAN COMMAND (FIXED - Works with ID) ==========
+    // ========== UNBAN COMMAND ==========
     if (command === 'unban') {
-        const userId = args[0];
+        const userId = getUserIdFromInput(args[0]);
         if (!userId) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a user ID to unban. Example: `.unban 123456789012345678`')] });
-        }
-
-        if (!/^\d{17,20}$/.test(userId)) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Invalid user ID. Please provide a valid numeric user ID.')] });
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a valid user ID to unban. Example: `.unban 123456789012345678`')] });
         }
 
         if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'You need **Ban Members** permission to unban someone.')] });
         }
 
-        const botMember = await message.guild.members.fetch(client.user.id);
-        if (!botMember.permissions.has(PermissionFlagsBits.BanMembers)) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'I need **Ban Members** permission to unban someone.')] });
-        }
-
         try {
-            // Fetch the ban list
             const bans = await message.guild.bans.fetch();
-            
-            // Find the user by ID
             const banEntry = bans.get(userId);
             
             if (!banEntry) {
-                return message.reply({ embeds: [createErrorEmbed('Error', `Could not find a banned user with ID: ${userId}. Make sure:\n1. The ID is correct\n2. The user is actually banned\n3. The bot has permission to view bans`)] });
+                return message.reply({ embeds: [createErrorEmbed('Error', `Could not find a banned user with ID: ${userId}.`)] });
             }
 
             const unbannedUser = banEntry.user;
-            
-            // Unban the user
             await message.guild.bans.remove(unbannedUser.id);
             
             const embed = createSuccessEmbed('User Unbanned', `**User:** ${unbannedUser.toString()}\n**User ID:** ${unbannedUser.id}\n\n**Moderator:** ${message.author.toString()}`);
@@ -179,19 +174,15 @@ client.on('messageCreate', async (message) => {
             
         } catch (error) {
             console.error(error);
-            await message.reply({ embeds: [createErrorEmbed('Error', `Failed to unban user. Error: ${error.message}`)] });
+            await message.reply({ embeds: [createErrorEmbed('Error', `Failed to unban user.`)] });
         }
     }
 
-    // ========== IUNBAN COMMAND (FIXED - Unban + DM Invite) ==========
+    // ========== IUNBAN COMMAND ==========
     if (command === 'iunban') {
-        const userId = args[0];
+        const userId = getUserIdFromInput(args[0]);
         if (!userId) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a user ID to unban and DM. Example: `.iunban 123456789012345678`')] });
-        }
-
-        if (!/^\d{17,20}$/.test(userId)) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Invalid user ID. Please provide a valid numeric user ID.')] });
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a valid user ID to unban. Example: `.iunban 123456789012345678`')] });
         }
 
         if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) {
@@ -199,22 +190,16 @@ client.on('messageCreate', async (message) => {
         }
 
         try {
-            // Fetch the ban list
             const bans = await message.guild.bans.fetch();
-            
-            // Find the user by ID
             const banEntry = bans.get(userId);
             
             if (!banEntry) {
-                return message.reply({ embeds: [createErrorEmbed('Error', `Could not find a banned user with ID: ${userId}. Make sure the ID is correct and the user is banned.`)] });
+                return message.reply({ embeds: [createErrorEmbed('Error', `Could not find a banned user with ID: ${userId}.`)] });
             }
 
             const unbannedUser = banEntry.user;
-            
-            // Unban the user
             await message.guild.bans.remove(unbannedUser.id);
             
-            // Try to DM the user with invite link
             let dmSent = false;
             try {
                 const dmEmbed = new EmbedBuilder()
@@ -225,34 +210,38 @@ client.on('messageCreate', async (message) => {
                 await unbannedUser.send({ embeds: [dmEmbed] });
                 dmSent = true;
             } catch (dmError) {
-                console.log(`Could not DM ${unbannedUser.tag}: ${dmError.message}`);
+                console.log(`Could not DM ${unbannedUser.tag}`);
             }
             
-            const embed = createSuccessEmbed('User Unbanned + DM', `**User:** ${unbannedUser.toString()}\n**User ID:** ${unbannedUser.id}\n\n**Moderator:** ${message.author.toString()}\n\n**DM Status:** ${dmSent ? '✅ Invite link sent successfully' : '❌ Could not DM user (DMs may be closed)'}`);
+            const embed = createSuccessEmbed('User Unbanned + DM', `**User:** ${unbannedUser.toString()}\n**User ID:** ${unbannedUser.id}\n\n**Moderator:** ${message.author.toString()}\n\n**DM Status:** ${dmSent ? '✅ Invite link sent' : '❌ Could not DM user'}`);
             await message.reply({ embeds: [embed] });
             
         } catch (error) {
             console.error(error);
-            await message.reply({ embeds: [createErrorEmbed('Error', `Failed to unban user. Error: ${error.message}`)] });
+            await message.reply({ embeds: [createErrorEmbed('Error', `Failed to unban user.`)] });
         }
     }
 
-    // ========== KICK COMMAND ==========
+    // ========== KICK COMMAND (Works with ID and Mention) ==========
     if (command === 'kick') {
-        const targetMention = args[0];
-        if (!targetMention) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Please mention a user to kick. Example: `.kick @user reason here`')] });
+        const userInput = args[0];
+        if (!userInput) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a user ID or mention a user to kick. Example: `.kick 123456789012345678 reason here` or `.kick @user reason here`')] });
         }
 
-        const userId = targetMention.replace(/[<@!>]/g, '');
+        const userId = getUserIdFromInput(userInput);
+        if (!userId) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Invalid user ID. Please provide a valid user ID or mention a user.')] });
+        }
         
         if (userId === message.author.id) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'You cannot kick yourself.')] });
         }
 
-        const targetMember = await message.guild.members.fetch(userId).catch(() => null);
+        let targetMember = await message.guild.members.fetch(userId).catch(() => null);
+        
         if (!targetMember) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user.')] });
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user in the server.')] });
         }
 
         if (!message.member.permissions.has(PermissionFlagsBits.KickMembers)) {
@@ -288,22 +277,26 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // ========== MUTE COMMAND ==========
+    // ========== MUTE COMMAND (Works with ID and Mention) ==========
     if (command === 'mute') {
-        const targetMention = args[0];
-        if (!targetMention) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Please mention a user to mute. Example: `.mute @user 1h reason here` (Time format: 10m, 1h, 1d)')] });
+        const userInput = args[0];
+        if (!userInput) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a user ID or mention a user to mute. Example: `.mute 123456789012345678 1h reason here` or `.mute @user 1h reason here`')] });
         }
 
-        const userId = targetMention.replace(/[<@!>]/g, '');
+        const userId = getUserIdFromInput(userInput);
+        if (!userId) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Invalid user ID. Please provide a valid user ID or mention a user.')] });
+        }
         
         if (userId === message.author.id) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'You cannot mute yourself.')] });
         }
 
-        const targetMember = await message.guild.members.fetch(userId).catch(() => null);
+        let targetMember = await message.guild.members.fetch(userId).catch(() => null);
+        
         if (!targetMember) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user.')] });
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user in the server.')] });
         }
 
         if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
@@ -356,25 +349,23 @@ client.on('messageCreate', async (message) => {
 
     // ========== UNMUTE COMMAND ==========
     if (command === 'unmute') {
-        const targetMention = args[0];
-        if (!targetMention) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Please mention a user to unmute. Example: `.unmute @user`')] });
+        const userInput = args[0];
+        if (!userInput) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a user ID or mention a user to unmute. Example: `.unmute 123456789012345678` or `.unmute @user`')] });
         }
 
-        const userId = targetMention.replace(/[<@!>]/g, '');
-        const targetMember = await message.guild.members.fetch(userId).catch(() => null);
+        const userId = getUserIdFromInput(userInput);
+        if (!userId) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Invalid user ID.')] });
+        }
 
+        const targetMember = await message.guild.members.fetch(userId).catch(() => null);
         if (!targetMember) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user.')] });
         }
 
         if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'You need **Moderate Members** permission to unmute someone.')] });
-        }
-
-        const botMember = await message.guild.members.fetch(client.user.id);
-        if (!botMember.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'I need **Moderate Members** permission to unmute someone.')] });
         }
 
         if (!targetMember.isCommunicationDisabled()) {
@@ -391,22 +382,26 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // ========== WARN COMMAND ==========
+    // ========== WARN COMMAND (Works with ID and Mention) ==========
     if (command === 'warn') {
-        const targetMention = args[0];
-        if (!targetMention) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Please mention a user to warn. Example: `.warn @user reason here`')] });
+        const userInput = args[0];
+        if (!userInput) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a user ID or mention a user to warn. Example: `.warn 123456789012345678 reason here` or `.warn @user reason here`')] });
         }
 
-        const userId = targetMention.replace(/[<@!>]/g, '');
+        const userId = getUserIdFromInput(userInput);
+        if (!userId) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Invalid user ID.')] });
+        }
         
         if (userId === message.author.id) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'You cannot warn yourself.')] });
         }
 
-        const targetMember = await message.guild.members.fetch(userId).catch(() => null);
+        let targetMember = await message.guild.members.fetch(userId).catch(() => null);
+        
         if (!targetMember) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user.')] });
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user in the server.')] });
         }
 
         if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
@@ -443,14 +438,17 @@ client.on('messageCreate', async (message) => {
 
     // ========== UNWARN COMMAND ==========
     if (command === 'unwarn') {
-        const targetMention = args[0];
+        const userInput = args[0];
         const warnId = args[1];
         
-        if (!targetMention || !warnId) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Please mention a user and provide a warning ID. Example: `.unwarn @user warningID`')] });
+        if (!userInput || !warnId) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a user ID/mention and a warning ID. Example: `.unwarn @user warningID` or `.unwarn 123456789012345678 warningID`')] });
         }
 
-        const userId = targetMention.replace(/[<@!>]/g, '');
+        const userId = getUserIdFromInput(userInput);
+        if (!userId) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Invalid user ID.')] });
+        }
         
         if (userId === message.author.id) {
             return message.reply({ embeds: [createErrorEmbed('Error', 'You cannot remove your own warnings.')] });
@@ -473,7 +471,7 @@ client.on('messageCreate', async (message) => {
         const warnIndex = userWarns.findIndex(w => w.id === warnId);
         
         if (warnIndex === -1) {
-            return message.reply({ embeds: [createErrorEmbed('Error', `Could not find a warning with ID ${warnId}. Use \`.warns\` to see your warning IDs or \`.warns @user\` to see theirs.`)] });
+            return message.reply({ embeds: [createErrorEmbed('Error', `Could not find a warning with ID ${warnId}. Use \`.warns\` to see warning IDs.`)] });
         }
 
         const removedWarn = userWarns[warnIndex];
@@ -504,9 +502,10 @@ client.on('messageCreate', async (message) => {
         let isSelf = true;
         
         if (args[0]) {
-            const targetMention = args[0];
-            const userId = targetMention.replace(/[<@!>]/g, '');
-            targetMember = await message.guild.members.fetch(userId).catch(() => null);
+            const userId = getUserIdFromInput(args[0]);
+            if (userId) {
+                targetMember = await message.guild.members.fetch(userId).catch(() => null);
+            }
             
             if (!targetMember) {
                 return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user.')] });
