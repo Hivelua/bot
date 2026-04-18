@@ -15,7 +15,7 @@ const client = new Client({
 const PREFIX = '.';
 const roleBackups = new Map();
 const jailBackups = new Map();
-const forcedNicknames = new Map(); // Store forced nicknames: userId -> {nickname, moderator}
+const forcedNicknames = new Map();
 
 // Persistent warnings storage
 const WARNINGS_FILE = './warnings.json';
@@ -34,7 +34,6 @@ function loadWarnings() {
     }
 }
 
-// Save warnings to file
 function saveWarnings() {
     const obj = Object.fromEntries(warns);
     fs.writeFileSync(WARNINGS_FILE, JSON.stringify(obj, null, 2));
@@ -43,7 +42,6 @@ function saveWarnings() {
 
 loadWarnings();
 
-// Track bot start time for stats
 const startTime = Date.now();
 
 client.once('ready', () => {
@@ -70,10 +68,11 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
     }
 });
 
+// Helper functions with custom emojis
 function createSuccessEmbed(title, description) {
     const embed = new EmbedBuilder()
         .setTitle(title)
-        .setDescription(`${description}\n\n✅ Action Successful`)
+        .setDescription(`${description}\n\n<a:unknown:1495084306781962432> Action Successful`)
         .setColor(0x00FF00)
         .setTimestamp();
     return embed;
@@ -113,12 +112,12 @@ client.on('messageCreate', async (message) => {
     // ========== SAY COMMAND ==========
     if (command === 'say') {
         if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'You need **Administrator** permission to use this command.')] });
+            return message.reply(`<:unknown:1495103708957118684> You need **Administrator** permission to use this command.`);
         }
         
         const sayMessage = args.join(' ');
         if (!sayMessage) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a message to say. Example: `.say Hello world!`')] });
+            return message.reply(`<:unknown:1495103708957118684> Please provide a message to say. Example: \`.say Hello world!\``);
         }
         
         try {
@@ -126,7 +125,7 @@ client.on('messageCreate', async (message) => {
             await message.channel.send(sayMessage);
         } catch (error) {
             console.error(error);
-            await message.reply({ embeds: [createErrorEmbed('Error', 'Failed to send message.')] });
+            await message.reply(`<:unknown:1495103708957118684> Failed to send message.`);
         }
     }
 
@@ -159,59 +158,98 @@ client.on('messageCreate', async (message) => {
         const newNickname = args.slice(1).join(' ');
         
         if (!userInput || !newNickname) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a user and nickname. Example: `.fn @user DesiredNickname` or `.fn 123456789012345678 DesiredNickname`')] });
+            return message.reply(`<:unknown:1495103708957118684> Please provide a user and nickname. Example: \`.fn @user DesiredNickname\``);
         }
         
         const userId = getUserIdFromInput(userInput);
         if (!userId) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Invalid user ID.')] });
+            return message.reply(`<:unknown:1495103708957118684> Invalid user ID.`);
         }
         
         if (userId === message.author.id) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'You cannot force your own nickname.')] });
+            return message.reply(`<:unknown:1495103708957118684> You cannot force your own nickname.`);
         }
         
         const targetMember = await message.guild.members.fetch(userId).catch(() => null);
         if (!targetMember) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user in the server.')] });
+            return message.reply(`<:unknown:1495103708957118684> Could not find that user in the server.`);
         }
         
         if (!message.member.permissions.has(PermissionFlagsBits.ManageNicknames)) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'You need **Manage Nicknames** permission to force a nickname.')] });
+            return message.reply(`<:unknown:1495103708957118684> You need **Manage Nicknames** permission to force a nickname.`);
         }
         
         const botMember = await message.guild.members.fetch(client.user.id);
         if (!botMember.permissions.has(PermissionFlagsBits.ManageNicknames)) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'I need **Manage Nicknames** permission to set nicknames.')] });
+            return message.reply(`<:unknown:1495103708957118684> I need **Manage Nicknames** permission to set nicknames.`);
         }
         
-        // Check role hierarchy
         const memberHighestRole = message.member.roles.highest;
         const targetHighestRole = targetMember.roles.highest;
         
         if (targetHighestRole.position >= memberHighestRole.position && message.member.id !== message.guild.ownerId) {
-            return message.reply({ embeds: [createErrorEmbed('Error', `Cannot force nickname for ${targetMember.user.tag} - they have a role higher than or equal to your highest role.`)] });
+            return message.reply(`<:unknown:1495103708957118684> Cannot force nickname for ${targetMember.user.tag} - they have a role higher than or equal to your highest role.`);
         }
         
         const botHighestRole = botMember.roles.highest;
         if (targetHighestRole.position >= botHighestRole.position) {
-            return message.reply({ embeds: [createErrorEmbed('Error', `Cannot force nickname for ${targetMember.user.tag} - they have a role higher than or equal to my highest role.`)] });
+            return message.reply(`<:unknown:1495103708957118684> Cannot force nickname for ${targetMember.user.tag} - they have a role higher than or equal to my highest role.`);
         }
         
-        // Check nickname length
         if (newNickname.length > 32) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Nickname must be 32 characters or less.')] });
+            return message.reply(`<:unknown:1495103708957118684> Nickname must be 32 characters or less.`);
         }
         
         try {
             await targetMember.setNickname(newNickname, `Forced by ${message.author.tag}`);
             forcedNicknames.set(targetMember.id, { nickname: newNickname, moderator: message.author.tag });
             
-            const embed = createSuccessEmbed('Nickname Forced', `**User:** ${targetMember.user.toString()}\n**Forced Nickname:** ${newNickname}\n\n**Moderator:** ${message.author.toString()}\n\n*The bot will auto-restore this nickname if the user tries to change it.*`);
-            await message.reply({ embeds: [embed] });
+            await message.reply(`<a:unknown:1495084306781962432> Forced nicknamed ${targetMember.user.toString()} to **${newNickname}**`);
         } catch (error) {
             console.error(error);
-            await message.reply({ embeds: [createErrorEmbed('Error', 'Failed to force nickname.')] });
+            await message.reply(`<:unknown:1495103708957118684> Failed to force nickname.`);
+        }
+    }
+
+    // ========== REMOVE FORCENICK COMMAND (.rfn) ==========
+    if (command === 'rfn') {
+        const userInput = args[0];
+        
+        if (!userInput) {
+            return message.reply(`<:unknown:1495103708957118684> Please provide a user. Example: \`.rfn @user\``);
+        }
+        
+        const userId = getUserIdFromInput(userInput);
+        if (!userId) {
+            return message.reply(`<:unknown:1495103708957118684> Invalid user ID.`);
+        }
+        
+        if (!message.member.permissions.has(PermissionFlagsBits.ManageNicknames)) {
+            return message.reply(`<:unknown:1495103708957118684> You need **Manage Nicknames** permission to remove forced nicknames.`);
+        }
+        
+        if (!forcedNicknames.has(userId)) {
+            return message.reply(`<:unknown:1495103708957118684> This user does not have a forced nickname.`);
+        }
+        
+        const forcedData = forcedNicknames.get(userId);
+        const targetMember = await message.guild.members.fetch(userId).catch(() => null);
+        
+        try {
+            forcedNicknames.delete(userId);
+            
+            if (targetMember) {
+                try {
+                    await targetMember.setNickname(null, `Forced nickname removed by ${message.author.tag}`);
+                } catch (nickError) {
+                    // Ignore
+                }
+            }
+            
+            await message.reply(`<a:unknown:1495084306781962432> Removed forced nickname from ${targetMember ? targetMember.user.toString() : `user ${userId}`} (was **${forcedData.nickname}**)`);
+        } catch (error) {
+            console.error(error);
+            await message.reply(`<:unknown:1495103708957118684> Failed to remove forced nickname.`);
         }
     }
 
@@ -300,7 +338,7 @@ client.on('messageCreate', async (message) => {
         let targetMember = await message.guild.members.fetch(userId).catch(() => null);
         
         if (!targetMember) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user in the server. Make sure the user is in the server.')] });
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user in the server.')] });
         }
 
         if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) {
