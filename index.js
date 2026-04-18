@@ -16,6 +16,7 @@ const PREFIX = '.';
 const roleBackups = new Map();
 const jailBackups = new Map();
 const forcedNicknames = new Map();
+const channelPermBackups = new Map();
 
 // Persistent warnings storage
 const WARNINGS_FILE = './warnings.json';
@@ -891,6 +892,141 @@ client.on('messageCreate', async (message) => {
             .setTimestamp();
         
         await message.reply({ embeds: [embed] });
+    }
+    // ========== LOCK COMMAND ==========
+    if (command === 'lock') {
+        if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
+            return message.reply(`<:unknown:1495103708957118684> You need **Manage Channels** permission to lock channels.`);
+        }
+
+        const botMember = await message.guild.members.fetch(client.user.id);
+        if (!botMember.permissions.has(PermissionFlagsBits.ManageChannels)) {
+            return message.reply(`<:unknown:1495103708957118684> I need **Manage Channels** permission to lock channels.`);
+        }
+
+        // Get target channel (mentioned or current)
+        let targetChannel = message.mentions.channels.first() || message.channel;
+        let reason = getReason(args.slice(targetChannel === message.channel ? 0 : 1), 'No reason provided');
+
+        try {
+            // Store original permissions in a Map if not already stored
+            if (!channelPermBackups.has(targetChannel.id)) {
+                const originalPerms = {};
+                const everyoneRole = message.guild.roles.everyone;
+                
+                // Save @everyone permissions
+                const everyonePerms = targetChannel.permissionOverwrites.cache.get(everyoneRole.id);
+                if (everyonePerms) {
+                    originalPerms[everyoneRole.id] = {
+                        allow: everyonePerms.allow.bitfield.toString(),
+                        deny: everyonePerms.deny.bitfield.toString()
+                    };
+                } else {
+                    originalPerms[everyoneRole.id] = { allow: '0', deny: '0' };
+                }
+                
+                // Save role overrides
+                for (const [roleId, overwrite] of targetChannel.permissionOverwrites.cache) {
+                    if (roleId !== everyoneRole.id) {
+                        originalPerms[roleId] = {
+                            allow: overwrite.allow.bitfield.toString(),
+                            deny: overwrite.deny.bitfield.toString()
+                        };
+                    }
+                }
+                
+                channelPermBackups.set(targetChannel.id, originalPerms);
+            }
+            
+            // Lock the channel (remove send messages for @everyone)
+            await targetChannel.permissionOverwrites.edit(message.guild.roles.everyone, {
+                SendMessages: false,
+                AddReactions: false,
+                CreatePublicThreads: false,
+                CreatePrivateThreads: false,
+                SendMessagesInThreads: false
+            });
+            
+            const embed = new EmbedBuilder()
+                .setTitle('🔒 Channel Locked')
+                .setDescription(`**Channel:** ${targetChannel.toString()}\n**Moderator:** ${message.author.toString()}\n**Reason:** ${reason}\n\nUse \`.unlock\` to restore original permissions.`)
+                .setColor(0xFFA500)
+                .setTimestamp();
+            
+            await message.reply({ embeds: [embed] });
+        } catch (error) {
+            console.error(error);
+            await message.reply(`<:unknown:1495103708957118684> Failed to lock channel.`);
+        }
+    }
+
+    // ========== UNLOCK COMMAND ==========
+    if (command === 'unlock') {
+        if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
+            return message.reply(`<:unknown:1495103708957118684> You need **Manage Channels** permission to unlock channels.`);
+        }
+
+        const botMember = await message.guild.members.fetch(client.user.id);
+        if (!botMember.permissions.has(PermissionFlagsBits.ManageChannels)) {
+            return message.reply(`<:unknown:1495103708957118684> I need **Manage Channels** permission to unlock channels.`);
+        }
+
+        // Get target channel (mentioned or current)
+        let targetChannel = message.mentions.channels.first() || message.channel;
+        let reason = getReason(args.slice(targetChannel === message.channel ? 0 : 1), 'No reason provided');
+
+        try {
+            // Restore original permissions
+            const originalPerms = channelPermBackups.get(targetChannel.id);
+            
+            if (originalPerms) {
+                // Restore @everyone permissions
+                const everyoneRole = message.guild.roles.everyone;
+                const everyonePerms = originalPerms[everyoneRole.id];
+                
+                if (everyonePerms) {
+                    await targetChannel.permissionOverwrites.edit(everyoneRole, {
+                        SendMessages: everyonePerms.allow.includes('SendMessages') ? true : null,
+                        AddReactions: everyonePerms.allow.includes('AddReactions') ? true : null,
+                        CreatePublicThreads: everyonePerms.allow.includes('CreatePublicThreads') ? true : null,
+                        CreatePrivateThreads: everyonePerms.allow.includes('CreatePrivateThreads') ? true : null,
+                        SendMessagesInThreads: everyonePerms.allow.includes('SendMessagesInThreads') ? true : null
+                    });
+                } else {
+                    // If no original perms, just allow sending messages
+                    await targetChannel.permissionOverwrites.edit(everyoneRole, {
+                        SendMessages: null,
+                        AddReactions: null,
+                        CreatePublicThreads: null,
+                        CreatePrivateThreads: null,
+                        SendMessagesInThreads: null
+                    });
+                }
+                
+                // Remove the backup
+                channelPermBackups.delete(targetChannel.id);
+            } else {
+                // No backup found, just unlock normally
+                await targetChannel.permissionOverwrites.edit(message.guild.roles.everyone, {
+                    SendMessages: null,
+                    AddReactions: null,
+                    CreatePublicThreads: null,
+                    CreatePrivateThreads: null,
+                    SendMessagesInThreads: null
+                });
+            }
+            
+            const embed = new EmbedBuilder()
+                .setTitle('🔓 Channel Unlocked')
+                .setDescription(`**Channel:** ${targetChannel.toString()}\n**Moderator:** ${message.author.toString()}\n**Reason:** ${reason}\n\nOriginal permissions have been restored.`)
+                .setColor(0x00FF00)
+                .setTimestamp();
+            
+            await message.reply({ embeds: [embed] });
+        } catch (error) {
+            console.error(error);
+            await message.reply(`<:unknown:1495103708957118684> Failed to unlock channel.`);
+        }
     }
 });
 
