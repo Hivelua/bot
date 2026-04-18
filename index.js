@@ -6,7 +6,8 @@ const client = new Client({
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildModeration
+        GatewayIntentBits.GuildModeration,
+        GatewayIntentBits.DirectMessages
     ]
 });
 
@@ -133,11 +134,11 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // ========== UNBAN COMMAND ==========
+    // ========== UNBAN COMMAND (FIXED - Works with ID) ==========
     if (command === 'unban') {
-        const userName = args[0];
-        if (!userName) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a user ID or username#tag to unban. Example: `.unban username#1234`')] });
+        const userInput = args[0];
+        if (!userInput) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a user ID or username#tag to unban. Example: `.unban 123456789012345678` or `.unban username#1234`')] });
         }
 
         if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) {
@@ -151,18 +152,78 @@ client.on('messageCreate', async (message) => {
 
         try {
             const bans = await message.guild.bans.fetch();
-            let bannedUser = bans.find(ban => ban.user.tag === userName || ban.user.id === userName);
+            
+            // Try to find by ID first, then by tag
+            let bannedUser = bans.find(ban => ban.user.id === userInput);
+            if (!bannedUser) {
+                bannedUser = bans.find(ban => ban.user.tag === userInput);
+            }
             
             if (!bannedUser) {
-                return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user in the ban list.')] });
+                return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user in the ban list. Make sure you provided the correct ID or username#tag.')] });
             }
 
-            await message.guild.members.unban(bannedUser.user.id, `Unbanned by ${message.author.tag}`);
-            const embed = createSuccessEmbed('User Unbanned', `**User:** ${bannedUser.user.toString()}\n\n**Moderator:** ${message.author.toString()}`);
+            const unbannedUser = bannedUser.user;
+            
+            await message.guild.members.unban(unbannedUser.id, `Unbanned by ${message.author.tag}`);
+            
+            const embed = createSuccessEmbed('User Unbanned', `**User:** ${unbannedUser.toString()}\n\n**Moderator:** ${message.author.toString()}`);
             await message.reply({ embeds: [embed] });
+            
         } catch (error) {
             console.error(error);
-            await message.reply({ embeds: [createErrorEmbed('Error', 'Failed to unban user.')] });
+            await message.reply({ embeds: [createErrorEmbed('Error', 'Failed to unban user. Make sure the ID is correct.')] });
+        }
+    }
+
+    // ========== IUNBAN COMMAND (Unban + DM Invite) ==========
+    if (command === 'iunban') {
+        const userInput = args[0];
+        if (!userInput) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'Please provide a user ID to unban and DM. Example: `.iunban 123456789012345678`')] });
+        }
+
+        if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'You need **Ban Members** permission to unban someone.')] });
+        }
+
+        const botMember = await message.guild.members.fetch(client.user.id);
+        if (!botMember.permissions.has(PermissionFlagsBits.BanMembers)) {
+            return message.reply({ embeds: [createErrorEmbed('Error', 'I need **Ban Members** permission to unban someone.')] });
+        }
+
+        try {
+            const bans = await message.guild.bans.fetch();
+            
+            // Try to find by ID
+            let bannedUser = bans.find(ban => ban.user.id === userInput);
+            if (!bannedUser) {
+                return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user in the ban list. Make sure you provided the correct ID.')] });
+            }
+
+            const unbannedUser = bannedUser.user;
+            
+            // Unban the user
+            await message.guild.members.unban(unbannedUser.id, `Unbanned by ${message.author.tag}`);
+            
+            // Try to DM the user with invite link
+            try {
+                const dmEmbed = new EmbedBuilder()
+                    .setTitle('You have been unbanned!')
+                    .setDescription(`You have been unbanned from **${message.guild.name}**.\n\nClick here to join back: https://discord.com/invite/Ur3gxVQSQH`)
+                    .setColor(0x00FF00)
+                    .setTimestamp();
+                await unbannedUser.send({ embeds: [dmEmbed] });
+            } catch (dmError) {
+                console.log(`Could not DM ${unbannedUser.tag}`);
+            }
+            
+            const embed = createSuccessEmbed('User Unbanned + DMed', `**User:** ${unbannedUser.toString()}\n\n**Moderator:** ${message.author.toString()}\n\n**DM Sent:** Invite link was sent to the user.`);
+            await message.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error(error);
+            await message.reply({ embeds: [createErrorEmbed('Error', 'Failed to unban user. Make sure the ID is correct.')] });
         }
     }
 
@@ -402,7 +463,7 @@ client.on('messageCreate', async (message) => {
         const warnIndex = userWarns.findIndex(w => w.id === warnId);
         
         if (warnIndex === -1) {
-            return message.reply({ embeds: [createErrorEmbed('Error', `Could not find a warning with ID ${warnId}. Use \`.warnings @user\` to see all warning IDs.`)] });
+            return message.reply({ embeds: [createErrorEmbed('Error', `Could not find a warning with ID ${warnId}. Use \`.warns\` to see your warning IDs or \`.warns @user\` to see theirs.`)] });
         }
 
         const removedWarn = userWarns[warnIndex];
@@ -427,35 +488,39 @@ client.on('messageCreate', async (message) => {
         await message.reply({ embeds: [embed] });
     }
 
-    // ========== WARNINGS COMMAND ==========
-    if (command === 'warnings') {
-        const targetMention = args[0];
-        if (!targetMention) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Please mention a user to view warnings. Example: `.warnings @user`')] });
+    // ========== WARNS COMMAND (Your warns OR someone else's) ==========
+    if (command === 'warns') {
+        let targetMember = message.member;
+        let isSelf = true;
+        
+        // Check if a user was mentioned
+        if (args[0]) {
+            const targetMention = args[0];
+            const userId = targetMention.replace(/[<@!>]/g, '');
+            targetMember = await message.guild.members.fetch(userId).catch(() => null);
+            
+            if (!targetMember) {
+                return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user.')] });
+            }
+            
+            // Check if the user has permission to view others' warnings
+            if (userId !== message.author.id && !message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+                return message.reply({ embeds: [createErrorEmbed('Error', 'You need **Moderate Members** permission to view other users\' warnings.')] });
+            }
+            isSelf = false;
         }
-
-        const userId = targetMention.replace(/[<@!>]/g, '');
-        const targetMember = await message.guild.members.fetch(userId).catch(() => null);
-
-        if (!targetMember) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'Could not find that user.')] });
-        }
-
-        if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-            return message.reply({ embeds: [createErrorEmbed('Error', 'You need **Moderate Members** permission to view warnings.')] });
-        }
-
-        const userWarns = warns.get(userId) || [];
+        
+        const userWarns = warns.get(targetMember.id) || [];
         
         if (userWarns.length === 0) {
             const embed = new EmbedBuilder()
                 .setTitle(`Warnings for ${targetMember.user.tag}`)
-                .setDescription('This user has no warnings.')
+                .setDescription(`${isSelf ? 'You have' : 'This user has'} no warnings.`)
                 .setColor(0x00FF00)
                 .setTimestamp();
             return message.reply({ embeds: [embed] });
         }
-
+        
         let description = `**Total Warnings:** ${userWarns.length}\n\n`;
         userWarns.forEach((warn, index) => {
             description += `**Warning #${index + 1} (ID: ${warn.id})**\n`;
@@ -463,7 +528,17 @@ client.on('messageCreate', async (message) => {
             description += `👤 Moderator: ${warn.moderator}\n`;
             description += `⏰ Time: ${warn.timestamp}\n\n`;
         });
-
+        
+        // Split into multiple embeds if too long (Discord limit is 4096 characters)
+        if (description.length > 4000) {
+            const embed = new EmbedBuilder()
+                .setTitle(`Warnings for ${targetMember.user.tag}`)
+                .setDescription(`This user has ${userWarns.length} warnings. Use \`.unwarn @user warningID\` to remove specific warnings.`)
+                .setColor(0xFFA500)
+                .setTimestamp();
+            return message.reply({ embeds: [embed] });
+        }
+        
         const embed = new EmbedBuilder()
             .setTitle(`Warnings for ${targetMember.user.tag}`)
             .setDescription(description)
