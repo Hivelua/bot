@@ -506,10 +506,12 @@ client.on('messageCreate', async (message) => {
                 return message.reply(`${targetMember.user.tag} has no roles to promote from. Use \`.promote @user RoleName\` to give them a specific role.`);
             }
 
+            // Get the highest role the user has
             const highestUserRole = userRoles.sort((a, b) => b.position - a.position).first();
             oldRoleName = highestUserRole.name;
             oldRoleMention = `<@&${highestUserRole.id}>`;
             
+            // Find the NEXT HIGHER role (above their current highest)
             const allRoles = message.guild.roles.cache.filter(role => role.name !== '@everyone');
             const sortedRoles = allRoles.sort((a, b) => b.position - a.position);
             
@@ -541,6 +543,7 @@ client.on('messageCreate', async (message) => {
             }
 
             try {
+                // Remove the old role and add the NEW HIGHER role
                 await targetMember.roles.remove(highestUserRole, `Promoted by ${message.author.tag}: ${reason}`);
                 await targetMember.roles.add(nextRole, `Promoted by ${message.author.tag}: ${reason}`);
                 
@@ -629,10 +632,12 @@ client.on('messageCreate', async (message) => {
                 return message.reply(`${targetMember.user.tag} has no roles to demote from.`);
             }
 
+            // Get the LOWEST role the user has
             const lowestUserRole = userRoles.sort((a, b) => a.position - b.position).first();
             const oldRoleName = lowestUserRole.name;
             const oldRoleMention = `<@&${lowestUserRole.id}>`;
             
+            // Find the NEXT LOWER role (below their current lowest)
             const allRoles = message.guild.roles.cache.filter(role => role.name !== '@everyone');
             const sortedRoles = allRoles.sort((a, b) => a.position - b.position);
             
@@ -654,6 +659,7 @@ client.on('messageCreate', async (message) => {
             }
 
             try {
+                // Remove the old role and add the NEW LOWER role
                 await targetMember.roles.remove(lowestUserRole, `Demoted by ${message.author.tag}: ${reason}`);
                 await targetMember.roles.add(nextRole, `Demoted by ${message.author.tag}: ${reason}`);
                 
