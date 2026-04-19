@@ -48,6 +48,131 @@ function saveWarnings() {
 
 loadWarnings();
 
+    // ========== AFK SYSTEM ==========
+    // Store AFK users: userId -> { reason, timestamp, storedMessages }
+    const afkUsers = new Map();
+
+    // AFK SET command
+    if (command === 'afk') {
+        const reason = args.join(' ') || 'No reason provided';
+        const userId = message.author.id;
+        
+        afkUsers.set(userId, {
+            reason: reason,
+            timestamp: Date.now(),
+            storedMessages: [] // Store messages that were sent while AFK
+        });
+        
+        // Try to set nickname with [AFK] prefix
+        try {
+            const currentNick = message.member.nickname || message.author.username;
+            if (!currentNick.startsWith('[AFK]')) {
+                await message.member.setNickname(`[AFK] ${currentNick.substring(0, 28)}`, 'AFK mode enabled');
+            }
+        } catch (err) {
+            console.log('Could not set AFK nickname (missing permissions)');
+        }
+        
+        const afkEmbed = new EmbedBuilder()
+            .setDescription(`<a:unknown:1495084306781962432> **${message.author.username}** is now AFK\n**Reason:** ${reason}`)
+            .setColor(0x00FF00)
+            .setTimestamp();
+        
+        await message.reply({ embeds: [afkEmbed] });
+    }
+
+    // Check for AFK users when someone sends a message
+    // This runs for EVERY message (after the command check)
+    
+    // Remove AFK when user sends a message (after AFK set)
+    setTimeout(async () => {
+        if (afkUsers.has(message.author.id) && !message.content.startsWith(PREFIX + 'afk')) {
+            const afkData = afkUsers.get(message.author.id);
+            const duration = Date.now() - afkData.timestamp;
+            const minutes = Math.floor(duration / 60000);
+            const seconds = Math.floor((duration % 60000) / 1000);
+            const durationText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+            
+            afkUsers.delete(message.author.id);
+            
+            // Remove [AFK] from nickname
+            try {
+                const currentNick = message.member?.nickname;
+                if (currentNick && currentNick.startsWith('[AFK]')) {
+                    const newNick = currentNick.replace('[AFK] ', '').substring(0, 32);
+                    await message.member.setNickname(newNick, 'AFK mode disabled');
+                }
+            } catch (err) {
+                console.log('Could not remove AFK nickname');
+            }
+            
+            const backEmbed = new EmbedBuilder()
+                .setDescription(`<a:unknown:1495084306781962432> **${message.author.username}** is no longer AFK\n**Duration:** ${durationText}`)
+                .setColor(0x00FF00)
+                .setTimestamp();
+            
+            await message.reply({ embeds: [backEmbed] });
+        }
+    }, 0);
+
+    // Handle message pings and replies - store messages for AFK users
+    if (message.mentions.users.size > 0 || message.reference) {
+        // For each mentioned user that is AFK
+        for (const [userId, afkData] of afkUsers) {
+            if (message.mentions.users.has(userId)) {
+                // Store the message
+                afkData.storedMessages.push({
+                    author: message.author.tag,
+                    authorId: message.author.id,
+                    content: message.content,
+                    channelId: message.channel.id,
+                    channelName: message.channel.name,
+                    timestamp: Date.now()
+                });
+                
+                // Keep only last 10 messages
+                if (afkData.storedMessages.length > 10) {
+                    afkData.storedMessages.shift();
+                }
+                
+                // Send AFK notification to the pinger
+                const duration = Date.now() - afkData.timestamp;
+                const minutes = Math.floor(duration / 60000);
+                const seconds = Math.floor((duration % 60000) / 1000);
+                const durationText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+                
+                const afkNotifyEmbed = new EmbedBuilder()
+                    .setDescription(`<:unknown:1495103708957118684> **${message.mentions.users.first().username}** is currently AFK\n**Reason:** ${afkData.reason}\n**AFK for:** ${durationText}\n\n*They will see your message when they return.*`)
+                    .setColor(0xFFA500);
+                
+                await message.reply({ embeds: [afkNotifyEmbed] }).catch(() => {});
+            }
+        }
+    }
+
+    // When AFK user sends a message, show them their stored messages
+    if (afkUsers.has(message.author.id) && !message.content.startsWith(PREFIX + 'afk')) {
+        const afkData = afkUsers.get(message.author.id);
+        
+        if (afkData.storedMessages.length > 0) {
+            const storedMessages = afkData.storedMessages;
+            const messagesText = storedMessages.map((msg, i) => {
+                return `**${i + 1}.** ${msg.author} in #${msg.channelName}: ${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}`;
+            }).join('\n\n');
+            
+            const storedEmbed = new EmbedBuilder()
+                .setTitle('📬 Messages While You Were AFK')
+                .setDescription(`You received **${storedMessages.length}** message${storedMessages.length !== 1 ? 's' : ''} while AFK:\n\n${messagesText}`)
+                .setColor(0x00AAFF)
+                .setTimestamp();
+            
+            await message.reply({ embeds: [storedEmbed] });
+            
+            // Clear stored messages after showing them
+            afkData.storedMessages = [];
+        }
+    }
+
 // Function to process warn actions
 async function processWarnActions(userId, guild, moderatorId) {
     const userWarns = warns.get(userId);
