@@ -813,11 +813,17 @@ client.on('messageCreate', async (message) => {
         try {
             const rolesToBackup = targetMember.roles.cache.filter(role => role.name !== '@everyone');
             const roleIds = rolesToBackup.map(role => role.id);
+            const roleNames = rolesToBackup.map(role => role.name).join(', ') || 'None';
             roleBackups.set(targetMember.id, roleIds);
 
             await targetMember.roles.set([], `Wiped by ${message.author.tag} (${message.author.id})`);
 
-            await message.reply(`Successfully wiped all roles from ${targetMember.user.tag}`);
+            const embed = new EmbedBuilder()
+                .setTitle('LawsHub Wipe')
+                .setDescription(`**User Wiped** ${targetMember.user.toString()}\n\n**Roles Removed:** ${rolesToBackup.size}\n**Removed Roles:** ${roleNames}\n\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.toString()}`)
+                .setColor(0xFFA500);
+
+            await message.reply({ embeds: [embed] });
 
         } catch (error) {
             console.error(error);
@@ -850,27 +856,34 @@ client.on('messageCreate', async (message) => {
 
         try {
             const rolesToRestore = [];
+            const roleNames = [];
             for (const roleId of backupRoleIds) {
                 const role = message.guild.roles.cache.get(roleId);
                 if (role) {
                     rolesToRestore.push(role);
+                    roleNames.push(role.name);
                 }
             }
 
             if (rolesToRestore.length === 0) {
-                return message.reply('Cannot restore.');
+                return message.reply('Cannot restore - the original roles no longer exist.');
             }
 
             await targetMember.roles.add(rolesToRestore, `Restored by ${message.author.tag} (${message.author.id})`);
             roleBackups.delete(targetMember.id);
-            await message.reply(`Successfully restored roles to ${targetMember.user.tag}`);
+
+            const embed = new EmbedBuilder()
+                .setTitle('LawsHub Unwipe')
+                .setDescription(`**User Unwiped** ${targetMember.user.toString()}\n\n**Roles Restored:** ${rolesToRestore.length}\n**Restored Roles:** ${roleNames.join(', ')}\n\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.toString()}`)
+                .setColor(0x00FF00);
+
+            await message.reply({ embeds: [embed] });
 
         } catch (error) {
             console.error(error);
             await message.reply('Failed to restore roles.');
         }
     }
-
     // ========== JAIL COMMAND ==========
     if (command === 'jail') {
         const targetMention = args[0];
@@ -913,11 +926,17 @@ client.on('messageCreate', async (message) => {
         try {
             const rolesToBackup = targetMember.roles.cache.filter(role => role.name !== '@everyone' && role.id !== jailRole.id);
             const roleIds = rolesToBackup.map(role => role.id);
+            const roleNames = rolesToBackup.map(role => role.name).join(', ') || 'None';
             jailBackups.set(targetMember.id, roleIds);
 
             await targetMember.roles.set([jailRole], `Jailed by ${message.author.tag} (${message.author.id})`);
 
-            await message.reply(`**${targetMember.user.tag} has been jailed!**\n **Moderator:** ${message.author.tag}`);
+            const embed = new EmbedBuilder()
+                .setTitle('LawsHub Jail')
+                .setDescription(`**User Jailed** ${targetMember.user.toString()}\n\n**Roles Removed:** ${rolesToBackup.size}\n**Removed Roles:** ${roleNames}\n**Jail Role:** ${jailRole.name}\n\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.toString()}`)
+                .setColor(0xFFA500);
+
+            await message.reply({ embeds: [embed] });
 
         } catch (error) {
             console.error(error);
@@ -962,28 +981,33 @@ client.on('messageCreate', async (message) => {
         try {
             const backupRoleIds = jailBackups.get(targetMember.id);
             const rolesToRestore = [];
+            const roleNames = [];
 
             if (backupRoleIds && backupRoleIds.length > 0) {
                 for (const roleId of backupRoleIds) {
                     const role = message.guild.roles.cache.get(roleId);
                     if (role) {
                         rolesToRestore.push(role);
+                        roleNames.push(role.name);
                     }
                 }
             }
 
             await targetMember.roles.set(rolesToRestore, `Unjailed by ${message.author.tag} (${message.author.id})`);
-
             jailBackups.delete(targetMember.id);
 
-            await message.reply(`**${targetMember.user.tag} has been unjailed!**\n **Moderator:** ${message.author.tag}`);
+            const embed = new EmbedBuilder()
+                .setTitle('LawsHub Unjail')
+                .setDescription(`**User Unjailed** ${targetMember.user.toString()}\n\n**Roles Restored:** ${rolesToRestore.length}\n**Restored Roles:** ${roleNames.length > 0 ? roleNames.join(', ') : 'None'}\n**Jail Role Removed:** ${jailRole.name}\n\n**Time:** ${new Date().toLocaleString()}\n**Moderator:** ${message.author.toString()}`)
+                .setColor(0x00FF00);
+
+            await message.reply({ embeds: [embed] });
 
         } catch (error) {
             console.error(error);
             await message.reply('Failed to unjail user.');
         }
     }
-
     // ========== LOCK COMMAND ==========
     if (command === 'lock') {
         if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
