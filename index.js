@@ -17,6 +17,7 @@ const roleBackups = new Map(); // For wipe/unwipe
 const jailBackups = new Map(); // For jail/unjail
 const forcedNicknames = new Map();
 const channelPermBackups = new Map(); // Store original channel permissions for lock/unlock
+const afkUsers = new Map(); // For AFK system
 
 // Persistent warnings storage
 const WARNINGS_FILE = './warnings.json';
