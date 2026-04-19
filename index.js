@@ -1,3 +1,4 @@
+s
 const { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 
