@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const fs = require('fs');
 
 const client = new Client({
@@ -18,6 +18,12 @@ const jailBackups = new Map(); // For jail/unjail
 const forcedNicknames = new Map();
 const channelPermBackups = new Map(); // Store original channel permissions for lock/unlock
 const afkUsers = new Map(); // AFK System - Store AFK users
+const claimedTickets = new Map(); // For ticket claims
+
+
+const ticketCategories = {
+    'script-key': { name: 'Script/Key Support', emoji: '1497257556295422132' }
+};
 
 // Persistent warnings storage
 const WARNINGS_FILE = './warnings.json';
@@ -1635,6 +1641,261 @@ client.on('messageCreate', async (message) => {
 
         await message.reply({ embeds: [embed] });
     }
-});
 
+// Function to create a ticket channel
+async function createTicketChannel(interaction, ticketType) {
+    const guild = interaction.guild;
+    const user = interaction.user;
+    const categoryId = '1497258380325027960';
+    const supportRoleId = '1495189880760828075';
+    
+    // Check if user already has an open ticket
+    const existingChannel = guild.channels.cache.find(
+        channel => channel.name === `ticket-${user.id}` && channel.parentId === categoryId
+    );
+    
+    if (existingChannel) {
+        return interaction.reply({ 
+            content: '❌ You already have an open ticket! Please close it first.', 
+            ephemeral: true 
+        });
+    }
+    
+    try {
+        const channel = await guild.channels.create({
+            name: `ticket-${user.id}`,
+            type: 0,
+            parent: categoryId,
+            permissionOverwrites: [
+                { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+                { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+                { id: supportRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+                { id: client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels] }
+            ]
+        });
+        
+        const ticketEmbed = new EmbedBuilder()
+            .setTitle('LawsHub Ticket Support')
+            .setDescription(`<a:unknown:1495084306781962432> **Explain your problem in full detail, please wait for a LawsHub support team to review and answer.**\n\n**Ticket Type:** ${ticketCategories[ticketType]?.name || ticketType}\n**Created by:** ${user.toString()}\n**Claimed by:** Not yet claimed`)
+            .setColor(0x2B017F);
+        
+        await channel.send({ 
+            content: `${user.toString()} <@&${supportRoleId}>`,
+            embeds: [ticketEmbed] 
+        });
+        
+        await interaction.reply({ 
+            content: `<a:unknown:1495084306781962432> Ticket created! Please continue in ${channel.toString()}`, 
+            ephemeral: true 
+        });
+        
+    } catch (error) {
+        console.error(error);
+        await interaction.reply({ content: '❌ Failed to create ticket channel.', ephemeral: true });
+    }
+}
+
+    // ========== TICKET PANEL COMMAND ==========
+    if (command === 'ticketpanel') {
+        const targetChannel = message.mentions.channels.first() || message.channel;
+        
+        const panelEmbed = new EmbedBuilder()
+            .setTitle('LawsHub Support')
+            .setDescription('**Please select a button below to open a ticket.**')
+            .setColor(0x2B017F);
+        
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('ticket_script-key')
+                    .setLabel('Script/Key')
+                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('1497257556295422132')
+            );
+        
+        await targetChannel.send({ embeds: [panelEmbed], components: [row] });
+        await message.reply(`✅ Ticket panel sent to ${targetChannel.toString()}`);
+    }
+
+    // ========== TICKET COMMANDS ==========
+    if (command === 'ticket') {
+        const subCommand = args[0]?.toLowerCase();
+        
+        // Check if in a ticket channel
+        if (!message.channel.name.startsWith('ticket-')) {
+            return message.reply('❌ This command can only be used in a ticket channel.');
+        }
+        
+        const userId = message.channel.name.replace('ticket-', '');
+        const ticketOwner = await message.guild.members.fetch(userId).catch(() => null);
+        const supportRoleId = '1495189880760828075';
+        
+        // ========== TICKET CLAIM ==========
+        if (subCommand === 'claim') {
+            if (!message.member.roles.cache.has(supportRoleId)) {
+                return message.reply('❌ You need the Support role to claim tickets.');
+            }
+            
+            if (claimedTickets.has(message.channel.id)) {
+                const claimer = await message.guild.members.fetch(claimedTickets.get(message.channel.id)).catch(() => null);
+                return message.reply(`❌ This ticket is already claimed by ${claimer?.user.toString() || 'someone'}.`);
+            }
+            
+            await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: false });
+            await message.channel.permissionOverwrites.edit(supportRoleId, { ViewChannel: false });
+            await message.channel.permissionOverwrites.edit(message.author.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true });
+            
+            if (ticketOwner) {
+                await message.channel.permissionOverwrites.edit(ticketOwner.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true });
+            }
+            
+            claimedTickets.set(message.channel.id, message.author.id);
+            
+            const embed = new EmbedBuilder()
+                .setTitle('Ticket Claimed')
+                .setDescription(`<a:unknown:1495084306781962432> **Ticket claimed by ${message.author.toString()}**\n\nThis ticket is now private.`)
+                .setColor(0x00FF00);
+            
+            await message.reply({ embeds: [embed] });
+        }
+        
+        // ========== TICKET TRANSFER ==========
+        else if (subCommand === 'transfer') {
+            const targetInput = args[1];
+            if (!targetInput) {
+                return message.reply('❌ Please mention a user to transfer this ticket to. Example: `.ticket transfer @user`');
+            }
+            
+            if (!message.member.roles.cache.has(supportRoleId)) {
+                return message.reply('❌ You need the Support role to transfer tickets.');
+            }
+            
+            const targetUserId = getUserIdFromInput(targetInput);
+            if (!targetUserId) {
+                return message.reply('❌ Invalid user.');
+            }
+            
+            const targetMember = await message.guild.members.fetch(targetUserId).catch(() => null);
+            if (!targetMember) {
+                return message.reply('❌ Could not find that user.');
+            }
+            
+            const currentClaimerId = claimedTickets.get(message.channel.id);
+            
+            if (currentClaimerId) {
+                await message.channel.permissionOverwrites.delete(currentClaimerId);
+            }
+            
+            await message.channel.permissionOverwrites.edit(targetMember.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true });
+            
+            claimedTickets.set(message.channel.id, targetMember.id);
+            
+            const embed = new EmbedBuilder()
+                .setTitle('Ticket Transferred')
+                .setDescription(`<a:unknown:1495084306781962432> **Ticket transferred to ${targetMember.toString()}**\n\nTransferred by: ${message.author.toString()}`)
+                .setColor(0xFFA500);
+            
+            await message.reply({ embeds: [embed] });
+        }
+        
+        // ========== TICKET CLOSE ==========
+        else if (subCommand === 'close') {
+            const reason = args.slice(1).join(' ') || 'No reason provided';
+            
+            const ticketOwnerId = message.channel.name.replace('ticket-', '');
+            const ticketOwnerMember = await message.guild.members.fetch(ticketOwnerId).catch(() => null);
+            const claimedById = claimedTickets.get(message.channel.id);
+            const claimedByMember = claimedById ? await message.guild.members.fetch(claimedById).catch(() => null) : null;
+            
+            // Fetch message history for transcript
+            const messages = await message.channel.messages.fetch({ limit: 100 });
+            const transcript = messages.reverse().map(m => `[${m.createdAt.toLocaleString()}] ${m.author.tag}: ${m.content}`).join('\n');
+            
+            // Send log to the log channel
+            const logChannelId = '1497258421953499146';
+            const logChannel = await message.guild.channels.fetch(logChannelId).catch(() => null);
+            
+            if (logChannel) {
+                const closedAt = Math.floor(Date.now() / 1000);
+                
+                const logEmbed = new EmbedBuilder()
+                    .setTitle('Ticket Closed')
+                    .setDescription(`Closed by ${message.author.toString()}`)
+                    .addFields(
+                        { name: 'Closed by', value: message.author.tag, inline: true },
+                        { name: 'Reason', value: reason, inline: true },
+                        { name: 'User', value: ticketOwnerMember ? ticketOwnerMember.user.tag : ticketOwnerId, inline: true },
+                        { name: 'Claimed by', value: claimedByMember ? claimedByMember.user.tag : 'Not claimed', inline: true },
+                        { name: 'Channel', value: message.channel.name, inline: true },
+                        { name: 'Time', value: `<t:${closedAt}:R>`, inline: true }
+                    )
+                    .setColor(0xFF0000)
+                    .setTimestamp();
+                
+                await logChannel.send({ embeds: [logEmbed] });
+                
+                if (transcript.length > 0) {
+                    const transcriptBuffer = Buffer.from(transcript, 'utf-8');
+                    await logChannel.send({ 
+                        content: `📝 **Transcript for ${message.channel.name}**`,
+                        files: [{ attachment: transcriptBuffer, name: `transcript-${message.channel.name}.txt` }] 
+                    }).catch(() => {});
+                }
+            }
+            
+            // Send transcript to ticket owner via DM
+            if (ticketOwnerMember) {
+                try {
+                    const transcriptBuffer = Buffer.from(transcript, 'utf-8');
+                    
+                    const dmEmbed = new EmbedBuilder()
+                        .setTitle('🎫 Ticket Closed')
+                        .setDescription(`Your ticket in **${message.guild.name}** has been closed.`)
+                        .addFields(
+                            { name: 'Closed by', value: message.author.tag, inline: true },
+                            { name: 'Reason', value: reason, inline: true },
+                            { name: 'Channel', value: message.channel.name, inline: true }
+                        )
+                        .setColor(0xFF0000)
+                        .setTimestamp();
+                    
+                    await ticketOwnerMember.send({ 
+                        embeds: [dmEmbed],
+                        files: [{ attachment: transcriptBuffer, name: `transcript-${message.channel.name}.txt` }]
+                    });
+                } catch (err) {
+                    console.log('Could not DM ticket owner');
+                }
+            }
+            
+            const embed = new EmbedBuilder()
+                .setTitle('Ticket Closed')
+                .setDescription(`<a:unknown:1495084306781962432> Ticket closed by ${message.author.toString()}\n**Reason:** ${reason}\n\nTranscript sent to ${ticketOwnerMember ? 'the user\'s DMs' : 'log channel'}.\nThis channel will be deleted in 5 seconds.`)
+                .setColor(0xFF0000);
+            
+            await message.reply({ embeds: [embed] });
+            
+            setTimeout(async () => {
+                try {
+                    await message.channel.delete(`Closed by ${message.author.tag}: ${reason}`);
+                } catch (err) {
+                    console.log('Could not delete channel');
+                }
+            }, 5000);
+        }
+        else {
+            return message.reply('Available ticket commands: `.ticket claim`, `.ticket transfer @user`, `.ticket close <reason>`');
+        }
+    }
+// Handle button interactions
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton()) return;
+    if (!interaction.customId.startsWith('ticket_')) return;
+    
+    const ticketType = interaction.customId.replace('ticket_', '');
+    await createTicketChannel(interaction, ticketType);
+    
+    await interaction.deferUpdate().catch(() => {});
+
+});
 client.login(process.env.DISCORD_TOKEN);
