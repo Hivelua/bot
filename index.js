@@ -945,7 +945,7 @@ client.on('messageCreate', async (message) => {
     if (command === 'say') {
  const OWNER_IDS = ['1413103929931337751', '856260234342039682', '1329319330034221057'];
 
-        if (message.author.id !== OWNER_ID) {
+        if (message.author.id !== OWNER_IDS) {
             return message.reply(`<:unknown:1495103708957118684> Only the bot owner can use this command.`);
         }
 
