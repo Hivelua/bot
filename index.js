@@ -465,21 +465,6 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // ========== ASH COMMAND ==========
-    if (command === 'ash') {
-        const TARGET_USER_ID = '1459349290806677733';
-
-        try {
-            const targetUser = await client.users.fetch(TARGET_USER_ID);
-            await targetUser.send(`All love from zippy !! <:unknown:1500505300711772283>`);
-            await message.reply(`✅ Message successfully sent to ashy-chan !!`);
-        } catch (error) {
-            console.error(error);
-            await message.channel.send(`<@${TARGET_USER_ID}> All love from zippy <:unknown:825765682201100339>`);
-            await message.reply(`⚠️ Couldn't DM that user (they may have DMs disabled), so I mentioned them here instead.`);
-        }
-    }
-
     // When AFK user sends a message, show them their stored messages
     if (afkUsers.has(message.author.id) && !message.content.startsWith(PREFIX + 'afk')) {
         const afkData = afkUsers.get(message.author.id);
@@ -529,6 +514,21 @@ client.on('messageCreate', async (message) => {
 
     const args = message.content.slice(PREFIX.length).trim().split(/ +/);
     const command = args.shift().toLowerCase();
+
+    // ========== ASH COMMAND ==========
+    if (command === 'ash') {
+        const TARGET_USER_ID = '1459349290806677733';
+
+        try {
+            const targetUser = await client.users.fetch(TARGET_USER_ID);
+            await targetUser.send(`All love from zippy !! <:unknown:1500505300711772283>`);
+            await message.reply(`Message succesfully sent to ashy-chan !!`);
+        } catch (error) {
+            console.error(error);
+            await message.channel.send(`<@${TARGET_USER_ID}> All love from zippy <:unknown:1500505300711772283>`);
+            await message.reply(`⚠️ Couldn't DM that user (they may have DMs disabled), so I mentioned them here instead.`);
+        }
+    }
 
     // ========== AFK SET COMMAND ==========
     if (command === 'afk') {
@@ -959,7 +959,7 @@ client.on('messageCreate', async (message) => {
 
     // ========== SAY COMMAND (Owner Only) ==========
     if (command === 'say') {
-        const OWNER_IDS = ['1413103929931337751', '856260234342039682', '1329319330034221057'];
+        const OWNER_IDS = ['1413103929931337751', '856260234342039682', '1329319330034221057', '1402004904620327042', '1280573177881297059'];
 
         if (!OWNER_IDS.includes(message.author.id)) {
             return message.reply(`<:unknown:1495103708957118684> Only the bot owner can use this command.`);
