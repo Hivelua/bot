@@ -434,21 +434,6 @@ function getReason(argsArray, defaultReason = 'No reason provided') {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    // ========== ASH COMMAND ==========
-    if (command === 'ash') {
-        const TARGET_USER_ID = '1459349290806677733';
-
-        try {
-            const targetUser = await client.users.fetch(TARGET_USER_ID);
-            await targetUser.send(`All love from zippy !! <:unknown:1500505300711772283>`);
-            await message.reply(`✅ Message successfully sent to ashy-chan !!`);
-        } catch (error) {
-            console.error(error);
-            await message.channel.send(`<@${TARGET_USER_ID}> All love from zippy <:unknown:825765682201100339>`);
-            await message.reply(`⚠️ Couldn't DM that user (they may have DMs disabled), so I mentioned them here instead.`);
-        }
-    }
-
     // ========== AFK SYSTEM - PING HANDLING ==========
     if (message.mentions.users.size > 0 || message.reference) {
         for (const [userId, afkData] of afkUsers) {
@@ -477,6 +462,21 @@ client.on('messageCreate', async (message) => {
 
                 await message.reply({ embeds: [afkNotifyEmbed] }).catch(() => {});
             }
+        }
+    }
+
+    // ========== ASH COMMAND ==========
+    if (command === 'ash') {
+        const TARGET_USER_ID = '1459349290806677733';
+
+        try {
+            const targetUser = await client.users.fetch(TARGET_USER_ID);
+            await targetUser.send(`All love from zippy !! <:unknown:1500505300711772283>`);
+            await message.reply(`✅ Message successfully sent to ashy-chan !!`);
+        } catch (error) {
+            console.error(error);
+            await message.channel.send(`<@${TARGET_USER_ID}> All love from zippy <:unknown:825765682201100339>`);
+            await message.reply(`⚠️ Couldn't DM that user (they may have DMs disabled), so I mentioned them here instead.`);
         }
     }
 
